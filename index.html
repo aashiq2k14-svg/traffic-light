@@ -1,0 +1,1333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Smart Traffic Light Remote</title>
+<meta name="description" content="Phone remote for the Smart Traffic Light school project: control the ESP32-S3 traffic light and the Raspberry Pi Pico car over Bluetooth, and ask the built-in AI anything.">
+<meta name="theme-color" content="#14181E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500;700&family=Oswald:wght@500;600&display=swap">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>
+/* Layout: one-screen phone remote. A dark signal head stays on top, the chosen panel scrolls, a tab bar sits at the bottom. */
+:root {
+  --bg: #ECE9E1;
+  --surface: #FBFAF7;
+  --surface-2: #E2DED3;
+  --line: #D3CEC1;
+  --fg: #14181E;
+  --muted: #59616C;
+  --accent: #8A5600;
+  --amber: #F2B233;
+  --red: #D7383E;
+  --yellow: #E39E12;
+  --green: #17945B;
+  --head: #14181E;
+  --head-fg: #F3F1EB;
+  --head-muted: #A3ACB7;
+  --lamp-off: #2A313B;
+  --on-signal: #FFFFFF;
+  --shadow: 0 1px 0 rgba(20, 24, 30, .06);
+  --display: "Oswald", "Roboto Condensed", "sans-serif-condensed", "Arial Narrow", Arial, sans-serif;
+  --body: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1216; --surface: #181D24; --surface-2: #222833; --line: #2E3541; --fg: #F3F1EB;
+    --muted: #9BA4AF; --accent: #F2B233; --red: #F0575C; --yellow: #F2B233; --green: #34C47C;
+    --head: #0A0C0F; --on-signal: #0F1216; --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1216; --surface: #181D24; --surface-2: #222833; --line: #2E3541; --fg: #F3F1EB;
+  --muted: #9BA4AF; --accent: #F2B233; --red: #F0575C; --yellow: #F2B233; --green: #34C47C;
+  --head: #0A0C0F; --on-signal: #0F1216; --shadow: none; color-scheme: dark;
+}
+html { height: 100%; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 var(--body); display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--head); }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- signal head ---------- */
+header.head {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--head); color: var(--head-fg); padding-block: 12px 0;
+}
+.topbar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand { flex: 1; min-width: 0; }
+.brand h1 { margin: 0; font: 600 19px/1.1 var(--display); letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) { .brand h1 { font-size: 17px; letter-spacing: .2px; } }
+.pill { display: flex; align-items: center; gap: 6px; margin-top: 4px; font: 700 11px/1 var(--body); letter-spacing: 1px; text-transform: uppercase; color: var(--head-muted); white-space: nowrap; }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: #59616C; }
+.pill[data-s="ble"] { color: #9FE3BE; } .pill[data-s="ble"] i { background: #34C47C; }
+.pill[data-s="sim"] { color: #F7D27C; } .pill[data-s="sim"] i { background: #F2B233; }
+.pill[data-s="busy"] i { background: #F2B233; animation: pulse 1s infinite; }
+.connect { border: 0; border-radius: 12px; padding: 10px 12px; font-weight: 700; background: var(--amber); color: #14181E; white-space: nowrap; }
+.connect[data-on="1"] { background: #222832; color: var(--head-fg); }
+
+.signal { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; padding-block: 14px; }
+.housing { display: flex; flex-direction: column; gap: 7px; padding: 9px; background: #0B0E12; border: 2px solid #2A313B; border-radius: 22px; }
+.lamp { width: 30px; height: 30px; border-radius: 50%; background: var(--lamp-off); transition: background .2s, box-shadow .2s; }
+.lamp.r.on { background: #E5484D; box-shadow: 0 0 16px #E5484D; }
+.lamp.y.on { background: #F2B233; box-shadow: 0 0 16px #F2B233; }
+.lamp.g.on { background: #34C47C; box-shadow: 0 0 16px #34C47C; }
+.lamp.y.blink { animation: blink 1s steps(1) infinite; }
+.readout { min-width: 0; display: grid; gap: 6px; }
+.row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.colour { font: 600 34px/1 var(--display); text-transform: uppercase; letter-spacing: 1px; }
+.count { font: 700 22px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--amber); }
+.mode { font: 700 11px/1 var(--body); letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 8px; border: 1px solid #3A424E; border-radius: 6px; color: var(--head-muted); }
+.carline { display: flex; align-items: center; gap: 8px; color: var(--head-fg); font-weight: 500; min-width: 0; }
+.carline span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carline #carText { white-space: pre-line; line-height: 1.3; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.seg button { padding: 9px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; color: inherit; }
+.seg button[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.track + .track { margin-top: 10px; }
+.track .car.two { background: #6FB7FF; }
+.carline svg { flex: none; }
+.tallies { display: flex; gap: 14px; font: 500 12px/1.2 var(--body); color: var(--head-muted); flex-wrap: wrap; }
+.tallies b { font: 700 15px/1 var(--mono); color: var(--head-fg); font-variant-numeric: tabular-nums; margin-right: 3px; }
+.tallies .viol b { color: #F0575C; }
+.track { position: relative; height: 6px; border-radius: 3px; background: #222832; margin-top: 2px; }
+.track .stopline { position: absolute; left: 60%; top: -4px; width: 3px; height: 14px; background: var(--head-fg); }
+.track .car { position: absolute; top: -3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 3px; background: var(--amber); transition: left .1s linear; }
+.lane { height: 6px; background: repeating-linear-gradient(90deg, var(--amber) 0 28px, transparent 28px 46px); opacity: .9; }
+
+/* ---------- panels ---------- */
+main { overflow-y: auto; min-height: 0; padding-block: 18px 28px; -webkit-overflow-scrolling: touch; }
+.panel { display: grid; gap: 22px; max-width: 720px; margin: 0 auto; }
+.sect { display: grid; gap: 10px; }
+.sect h2 { margin: 0; font: 600 15px/1.2 var(--display); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); }
+.sect p.note { margin: 0; color: var(--muted); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 420px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cmd {
+  display: grid; gap: 2px; justify-items: start; text-align: left; min-height: 62px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+  transition: transform .08s, background .15s;
+}
+.cmd:active { transform: scale(.97); }
+.cmd b { font-weight: 700; font-size: 15px; line-height: 1.15; }
+.cmd code { font: 500 11px/1.2 var(--mono); color: var(--muted); }
+.cmd.sig { border-left-width: 6px; }
+.cmd.sig.r { border-left-color: var(--red); } .cmd.sig.y { border-left-color: var(--yellow); } .cmd.sig.g { border-left-color: var(--green); }
+.cmd.fill-red { background: var(--red); border-color: var(--red); color: var(--on-signal); }
+.cmd.fill-green { background: var(--green); border-color: var(--green); color: var(--on-signal); }
+.cmd.fill-red code, .cmd.fill-green code { color: inherit; opacity: .8; }
+.cmd.warn { border: 1px dashed var(--yellow); }
+.cmd.big { min-height: 76px; }
+.cmd.big b { font: 600 24px/1 var(--display); letter-spacing: 1px; text-transform: uppercase; }
+.cmd[disabled] { opacity: .45; }
+.cmd[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.cmd[aria-pressed="true"] code { color: inherit; opacity: .75; }
+.slider { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.slider label { font-weight: 700; }
+.slider output { font: 700 16px/1 var(--mono); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.steppers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stepper { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 6px; justify-items: center; }
+.stepper .lbl { font: 700 11px/1 var(--body); letter-spacing: 1.2px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.stepper .lbl i { width: 10px; height: 10px; border-radius: 50%; }
+.stepper .ctl { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; width: 100%; gap: 4px; }
+.stepper button { height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); font-weight: 700; font-size: 18px; line-height: 1; }
+.stepper output { text-align: center; font: 700 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.stepper small { color: var(--muted); font-size: 11px; }
+
+/* demo */
+.steps { display: grid; gap: 10px; counter-reset: s; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; }
+.step.done { opacity: .62; }
+.step header { display: flex; gap: 12px; align-items: baseline; }
+.step header .n { font: 600 26px/1 var(--display); color: var(--accent); min-width: 1.2ch; }
+.step header .who { font-size: 13px; color: var(--muted); }
+.step blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--line); font-style: italic; color: var(--fg); }
+.step .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.step .acts .cmd { min-height: 0; padding: 8px 14px; }
+.step .say { font-weight: 700; color: var(--accent); }
+.ghost { background: none; border: 1px solid var(--line); border-radius: 12px; padding: 9px 14px; font-weight: 700; }
+
+/* chat */
+.chat { display: grid; gap: 10px; }
+.msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me { justify-self: end; background: var(--fg); color: var(--bg); border-bottom-right-radius: 4px; }
+.msg.ai { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.ai.thinking { color: var(--muted); font-style: italic; }
+.msg .sent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msg .sent code { font: 500 12px/1 var(--mono); padding: 5px 7px; border-radius: 6px; background: var(--surface-2); }
+.msg .sent .res { font-size: 12px; color: var(--muted); flex-basis: 100%; white-space: pre-wrap; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.engine { font-size: 12px; color: var(--muted); }
+.engine b { color: var(--accent); }
+.composer { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: end; }
+.composer textarea { resize: none; min-height: 46px; max-height: 120px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.round { width: 46px; height: 46px; border-radius: 14px; border: 0; background: var(--amber); color: #14181E; display: grid; place-items: center; }
+.round.alt { background: var(--surface-2); color: var(--fg); }
+.round.live { background: var(--red); color: #fff; animation: pulse 1s infinite; }
+
+/* log */
+.log { font: 500 12.5px/1.5 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; max-height: 52vh; overflow-y: auto; }
+.log div { display: grid; grid-template-columns: 8ch minmax(0, 1fr); gap: 8px; }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log .out { color: var(--accent); }
+.log .warn { color: var(--red); font-weight: 700; }
+.log .sys { color: var(--muted); }
+.term { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.term input, .field input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-family: var(--mono); }
+
+/* settings */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 12px; }
+.card p { margin: 0; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle span b { display: block; }
+.toggle span small { color: var(--muted); }
+.switch { appearance: none; width: 50px; height: 30px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); position: relative; flex: none; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--fg); transition: left .15s; }
+.switch:checked { background: var(--amber); }
+.switch:checked::after { left: 23px; background: #14181E; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 700; font-size: 13px; }
+.field small, .card small { color: var(--muted); }
+ol.howto { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+a { color: var(--accent); }
+
+/* tab bar */
+nav.tabs {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+nav.tabs button { border: 0; background: none; padding: 9px 2px 10px; display: grid; justify-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button[aria-selected="true"] { color: var(--fg); }
+nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
+
+.report { margin-top: 6px; border: 0; background: none; padding: 2px 0; font-size: 12px; color: var(--muted); text-decoration: underline; }
+.reportbox { margin-top: 8px; display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); white-space: normal; }
+.reportbox .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.reportbox .opts button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 6px 10px; font-size: 12.5px; }
+.reportbox .opts button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.reportbox a.send { font-weight: 700; }
+.toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20; max-width: min(92vw, 520px); padding: 11px 16px; border-radius: 12px; background: var(--fg); color: var(--bg); font-weight: 500; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.toast.bad { background: var(--red); color: #fff; }
+
+@keyframes pulse { 50% { opacity: .45; } }
+@keyframes blink { 50% { background: var(--lamp-off); box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+[hidden]{display:none !important}
+</style>
+
+<header class="head">
+  <div class="gutter">
+    <div class="topbar">
+      <div class="brand">
+        <h1>Smart Traffic Light</h1>
+        <span class="pill" id="pill" data-s="off"><i></i><span id="pillText">Offline</span></span>
+      </div>
+      <button class="connect" id="connectBtn" type="button">Connect</button>
+    </div>
+    <div class="signal">
+      <div class="housing" aria-hidden="true">
+        <div class="lamp r" id="lampR"></div>
+        <div class="lamp y" id="lampY"></div>
+        <div class="lamp g" id="lampG"></div>
+      </div>
+      <div class="readout">
+        <div class="row1">
+          <span class="colour" id="colour">—</span>
+          <span class="count" id="count"></span>
+          <span class="mode" id="mode">No signal</span>
+        </div>
+        <div class="carline">
+          <svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect x="1" y="4" width="20" height="8" rx="3" fill="currentColor"/><rect x="5" y="1" width="11" height="5" rx="2" fill="currentColor"/><circle cx="6" cy="13" r="2.4" fill="#F2B233"/><circle cx="16" cy="13" r="2.4" fill="#F2B233"/></svg>
+          <span id="carText">Car: waiting for the traffic light</span>
+        </div>
+        <div class="tallies">
+          <span><b id="tCrossed">0</b>crossed</span>
+          <span><b id="tWaited">0</b>waited</span>
+          <span class="viol"><b id="tViol">0</b>red-light</span>
+          <span><b id="tSpeed">160</b>speed</span>
+        </div>
+        <div class="track" id="track" hidden><div class="stopline"></div><div class="car" id="trackCar" title="Car 1"></div></div>
+        <div class="track" id="track2" hidden><div class="stopline"></div><div class="car two" id="trackCar2" title="Car 2"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="lane" aria-hidden="true"></div>
+</header>
+
+<main class="gutter" id="main">
+  <!-- CONTROL -->
+  <section class="panel" id="p-control" data-panel="control">
+    <div class="sect">
+      <h2>Traffic light</h2>
+      <div class="grid">
+        <button class="cmd" data-c="A" type="button"><b>Auto cycle</b><code>A</code></button>
+        <button class="cmd sig r" data-c="R" type="button"><b>Hold red</b><code>R</code></button>
+        <button class="cmd sig y" data-c="Y" type="button"><b>Hold yellow</b><code>Y</code></button>
+        <button class="cmd sig g" data-c="G" type="button"><b>Hold green</b><code>G</code></button>
+        <button class="cmd" data-c="NEXT" type="button"><b>Next colour</b><code>NEXT</code></button>
+        <button class="cmd" data-c="PED" type="button"><b>Pedestrian button</b><code>PED</code></button>
+        <button class="cmd" data-c="NIGHT" type="button"><b>Night mode</b><code>NIGHT</code></button>
+        <button class="cmd" data-c="TEST" type="button"><b>Lamp test</b><code>TEST</code></button>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Mini cars</h2>
+      <div class="seg" id="carPick" aria-label="Which car the buttons control">
+        <button type="button" data-target="" aria-pressed="true">Both cars</button>
+        <button type="button" data-target="1" aria-pressed="false">Car 1</button>
+        <button type="button" data-target="2" aria-pressed="false">Car 2</button>
+      </div>
+      <div class="grid two">
+        <button class="cmd big fill-green" data-c="GO" data-per-car type="button"><b>Go</b><code>GO · obeys the lights</code></button>
+        <button class="cmd big fill-red" data-c="STOP" data-per-car type="button"><b>Stop</b><code>STOP · brakes now</code></button>
+      </div>
+      <div class="grid three">
+        <button class="cmd" data-c="SLOWER" type="button"><b>Slower</b><code>SLOWER</code></button>
+        <button class="cmd" data-c="FASTER" type="button"><b>Faster</b><code>FASTER</code></button>
+        <button class="cmd warn" data-c="RUSH" data-per-car type="button"><b>Rush test</b><code>RUSH · ignores red</code></button>
+      </div>
+      <div class="slider">
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="100" max="255" step="5" value="160">
+        <output id="speedOut" for="speed">160</output>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Car horn &amp; buzzers</h2>
+      <div class="grid">
+        <button class="cmd snd" data-c="VOICE" data-snd="VOICE" type="button" aria-pressed="false" hidden><b>Voice</b><code>VOICE</code></button>
+        <button class="cmd snd" data-c="BEEP" data-snd="BEEP" type="button" aria-pressed="false" hidden><b>Beeps only</b><code>BEEP</code></button>
+        <button class="cmd snd" data-c="MUTE" data-snd="OFF" type="button" aria-pressed="false"><b>Mute buzzers</b><code>MUTE</code></button>
+        <button class="cmd" data-c="HORN" data-per-car type="button"><b>Car horn</b><code>HORN</code></button>
+      </div>
+      <div class="slider" hidden>
+        <label for="vol">Volume</label>
+        <input id="vol" type="range" min="0" max="30" step="1" value="22">
+        <output id="volOut" for="vol">22</output>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Light timing</h2>
+      <div class="steppers">
+        <div class="stepper"><span class="lbl"><i style="background:var(--green)"></i>Green</span><div class="ctl"><button type="button" data-step="GREEN" data-d="-1" aria-label="Shorter green">−</button><output id="tGreen">8</output><button type="button" data-step="GREEN" data-d="1" aria-label="Longer green">+</button></div><small>seconds · 1–60</small></div>
+        <div class="stepper"><span class="lbl"><i style="background:var(--yellow)"></i>Yellow</span><div class="ctl"><button type="button" data-step="YELLOW" data-d="-1" aria-label="Shorter yellow">−</button><output id="tYellow">2</output><button type="button" data-step="YELLOW" data-d="1" aria-label="Longer yellow">+</button></div><small>seconds · 1–10</small></div>
+        <div class="stepper"><span class="lbl"><i style="background:var(--red)"></i>Red</span><div class="ctl"><button type="button" data-step="RED" data-d="-1" aria-label="Shorter red">−</button><output id="tRed">8</output><button type="button" data-step="RED" data-d="1" aria-label="Longer red">+</button></div><small>seconds · 1–60</small></div>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Check</h2>
+      <div class="grid three">
+        <button class="cmd" data-c="S" type="button"><b>Status</b><code>S</code></button>
+        <button class="cmd" data-c="PING" type="button"><b>Ping</b><code>PING</code></button>
+        <button class="cmd" id="resetBtn" type="button"><b>Reset counts</b><code>RESET</code></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEMO -->
+  <section class="panel" id="p-demo" data-panel="demo" hidden>
+    <div class="sect">
+      <h2>Live demo · slide 13</h2>
+      <p class="note">Tanzil talks, Harshit moves the car, and you press the buttons. Tap each one when you hear the line above it.</p>
+    </div>
+    <div class="steps" id="steps"></div>
+    <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="cmd" data-c="S" type="button" style="min-height:0"><b>Something went wrong</b><code>S · read the status out</code></button>
+      <button class="ghost" id="resetSteps" type="button">Start the demo again</button>
+    </div>
+  </section>
+
+  <!-- AI -->
+  <section class="panel" id="p-ai" data-panel="ai" hidden>
+    <div class="sect">
+      <h2>Ask anything</h2>
+      <p class="engine" id="engine">Checking the AI…</p>
+    </div>
+    <div class="chat" id="chat" aria-live="polite"></div>
+    <div class="chips" id="chips"></div>
+    <form class="composer" id="composer">
+      <label for="ask" hidden>Message</label>
+      <textarea id="ask" rows="1" placeholder="Ask a question or say what to do…"></textarea>
+      <button class="round alt" id="micBtn" type="button" aria-label="Speak" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <button class="round" id="sendBtn" type="submit" aria-label="Send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+    </form>
+  </section>
+
+  <!-- LOG -->
+  <section class="panel" id="p-log" data-panel="log" hidden>
+    <div class="sect">
+      <h2>What the traffic light says</h2>
+      <div class="log" id="log" role="log"></div>
+    </div>
+    <form class="term" id="term">
+      <label for="raw" hidden>Command</label>
+      <input id="raw" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type a command, e.g. GREEN=10">
+      <button class="connect" type="submit">Send</button>
+    </form>
+    <button class="ghost" id="clearLog" type="button">Clear the list</button>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="panel" id="p-more" data-panel="more" hidden>
+    <div class="sect">
+      <h2>Practice</h2>
+      <div class="card">
+        <label class="toggle" for="simToggle"><span><b>Practice mode</b><small>A pretend traffic light and car inside the app, so you can rehearse the demo without the hardware.</small></span><input class="switch" type="checkbox" id="simToggle"></label>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Connecting</h2>
+      <div class="card">
+        <ol class="howto">
+          <li>Switch on the traffic light and the car.</li>
+          <li>Turn on Bluetooth on the phone.</li>
+          <li>Tap <b>Connect</b> and pick <b>TrafficLight</b>.</li>
+        </ol>
+        <small id="bleNote">Works in Chrome on Android. On an iPhone, open the app in the free Bluefy browser.</small>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>AI</h2>
+      <div class="card">
+        <p id="aiNote">Inside Claude, the AI uses your Claude account. Anywhere else, add a free Google Gemini key.</p>
+        <div class="field">
+          <label for="gemKey">Gemini API key</label>
+          <input id="gemKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+          <small>Get one free at aistudio.google.com → Get API key. It stays on this phone.</small>
+        </div>
+        <div class="field">
+          <label for="gemModel">Gemini model</label>
+          <input id="gemModel" autocomplete="off" spellcheck="false" value="gemini-flash-latest">
+        </div>
+        <button class="ghost" id="saveAi" type="button">Save AI settings</button>
+        <label class="toggle" for="voiceToggle"><span><b>Read answers aloud</b><small>The phone speaks each AI answer.</small></span><input class="switch" type="checkbox" id="voiceToggle"></label>
+      </div>
+    </div>
+    <div class="sect">
+      <h2>Install on the phone</h2>
+      <div class="card" id="installCard">
+        <button class="connect" id="installBtn" type="button" hidden>Install the app</button>
+        <ol class="howto" id="installSteps">
+          <li>Open the app's web address in Chrome on the phone.</li>
+          <li>Tap the <b>⋮</b> menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</li>
+          <li>Open it from the new icon: it runs full screen, like any other app.</li>
+        </ol>
+      </div>
+    </div>
+    <p class="note" style="color:var(--muted);font-size:12px;margin:0">Smart Traffic Light Remote 1.0 · works with traffic_light.py that has the J command. Older code still works; the live numbers just update less often.<span id="privacyLine" hidden> · <a id="privacyLink" href="privacy.html">Privacy policy</a></span></p>
+  </section>
+</main>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" type="button" data-tab="control" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="4"/><circle cx="12" cy="7" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="17" r="1.6" fill="currentColor"/></svg>Control</button>
+  <button role="tab" type="button" data-tab="demo" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14l11-7z"/></svg>Demo</button>
+  <button role="tab" type="button" data-tab="ai" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg>Ask AI</button>
+  <button role="tab" type="button" data-tab="log" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Log</button>
+  <button role="tab" type="button" data-tab="more" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</button>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("stl." + k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("stl." + k, v); } catch {} },
+  };
+
+  const CONFIG = window.STL_CONFIG || null;      // set only in the installable app
+  const STANDALONE = !!CONFIG;
+
+  /* ================= live state ================= */
+  const LIGHTS = ["RED", "YELLOW", "GREEN"];
+  const CAR_TEXT = ["Driving", "Waiting at the stop line", "Crossing the line", "Stopped by the phone", "Stopped: no radio signal"];
+  const state = { light: null, mode: "", left: -1, car: -1, car2: -1, cmd2: "GO", crossed: 0, waited: 0, viol: 0, speed: 160, cmd: "GO", times: [8, 2, 8], sound: "", vol: 22, fresh: false };
+
+  function render() {
+    const L = state.light;
+    $("lampR").className = "lamp r" + (L === "RED" ? " on" : "");
+    $("lampG").className = "lamp g" + (L === "GREEN" ? " on" : "");
+    $("lampY").className = "lamp y" + (L === "YELLOW" ? " on" : "") + (state.mode === "NIGHT" ? " blink" : "");
+    $("colour").textContent = L ? (state.mode === "NIGHT" ? "Flashing" : L) : "—";
+    $("count").textContent = state.left >= 0 && L ? state.left + "s" : "";
+    $("mode").textContent = state.mode ? state.mode : (link.kind === "none" ? "No signal" : "Waiting");
+    const carLine = (n, st, cmd) => {
+      let t = st >= 0 ? CAR_TEXT[st].toLowerCase() : "offline";
+      if (cmd === "STOP" && st === 3) t = "stopped by the phone";
+      if (cmd === "RUSH") t += " · RUSH on";
+      return "Car " + n + ": " + t;
+    };
+    $("carText").textContent = link.kind === "none" ? "Cars: connect to see them"
+      : carLine(1, state.car, state.cmd) + "\n" + carLine(2, state.car2, state.cmd2);
+    $("tCrossed").textContent = state.crossed;
+    $("tWaited").textContent = state.waited;
+    $("tViol").textContent = state.viol;
+    $("tSpeed").textContent = state.speed;
+    $("tGreen").textContent = state.times[0];
+    $("tYellow").textContent = state.times[1];
+    $("tRed").textContent = state.times[2];
+    if (!speedDragging) { $("speed").value = state.speed; $("speedOut").textContent = state.speed; }
+    if (!volDragging) { $("vol").value = state.vol; $("volOut").textContent = state.vol; }
+    document.querySelectorAll(".snd").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.snd === state.sound)));
+  }
+
+  function parseStateLine(line) {          // "#L=RED,M=AUTO,N=5,C=1,X=3,W=2,V=0,S=160,K=GO,T=8/2/8,Q=VOICE,U=22"
+    const f = {};
+    line.slice(1).split(",").forEach((kv) => { const i = kv.indexOf("="); if (i > 0) f[kv.slice(0, i)] = kv.slice(i + 1); });
+    if (LIGHTS.includes(f.L)) state.light = f.L;
+    if (f.M) state.mode = f.M;
+    if (f.N !== undefined) state.left = parseInt(f.N, 10);
+    if (f.C !== undefined) state.car = parseInt(f.C, 10);
+    if (f.C2 !== undefined) state.car2 = parseInt(f.C2, 10);
+    if (f.K2) state.cmd2 = f.K2;
+    if (f.X !== undefined) state.crossed = +f.X;
+    if (f.W !== undefined) state.waited = +f.W;
+    if (f.V !== undefined) state.viol = +f.V;
+    if (f.S !== undefined && !speedDragging) state.speed = +f.S;
+    if (f.K) state.cmd = f.K;
+    if (["VOICE", "BEEP", "OFF"].includes(f.Q)) state.sound = f.Q;
+    if (f.U !== undefined && !volDragging) state.vol = +f.U;
+    if (f.T) {
+      const t = f.T.split("/").map(Number);
+      if (t.length === 3 && t.every((n) => n > 0)) t.forEach((n, i) => { if (!(i in pendingTimes)) state.times[i] = n; });
+    }
+    state.fresh = true;
+    render();
+  }
+
+  // Quick updates from ordinary messages (also covers older traffic light code without J)
+  function learnFrom(line) {
+    let m;
+    if ((m = line.match(/^LIGHT: (RED|YELLOW|GREEN)(.*)$/))) {
+      state.light = m[1];
+      if (/auto mode/.test(m[2])) state.mode = "AUTO";
+      else if (/manual/.test(m[2])) state.mode = "MANUAL";
+      const i = { GREEN: 0, YELLOW: 1, RED: 2 }[m[1]];
+      state.left = state.mode === "AUTO" ? state.times[i] : -1;
+    } else if (/^NIGHT MODE/.test(line)) { state.mode = "NIGHT"; state.light = "YELLOW"; state.left = -1; }
+    else if (/^CAR CMD: (\w+)/.test(line)) state.cmd = state.cmd2 = line.match(/^CAR CMD: (\w+)/)[1];
+    else if ((m = line.match(/^CAR ([12]) CMD: (\w+)/))) state[m[1] === "1" ? "cmd" : "cmd2"] = m[2];
+    else if ((m = line.match(/^Car speed = (\d+)/))) state.speed = +m[1];
+    else if ((m = line.match(/^(Green|Yellow|Red) time = (\d+)/))) state.times[{ Green: 0, Yellow: 1, Red: 2 }[m[1]]] = +m[2];
+    else if (/^CAR OFFLINE/.test(line)) state.car = -1;
+    else if ((m = line.match(/^CAR ([12]) OFFLINE/))) state[m[1] === "1" ? "car" : "car2"] = -1;
+    else if ((m = line.match(/^SOUND: (voice|beeps|off)/))) state.sound = { voice: "VOICE", beeps: "BEEP", off: "OFF" }[m[1]];
+    else if ((m = line.match(/^Volume = (\d+)/))) state.vol = +m[1];
+    else if (/RED LIGHT VIOLATION/.test(line)) {
+      toast("Red-light violation caught", true);
+      try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch {}
+    }
+    render();
+  }
+
+  setInterval(() => { if (state.left > 0) { state.left--; render(); } }, 1000);
+
+  /* ================= log ================= */
+  const logLines = [];
+  function log(text, kind = "in") {
+    const t = new Date();
+    logLines.push({ t, text, kind });
+    if (logLines.length > 400) logLines.shift();
+    const row = document.createElement("div");
+    const time = document.createElement("time");
+    time.textContent = t.toTimeString().slice(0, 8).slice(0, 5) + ":" + t.toTimeString().slice(6, 8);
+    time.textContent = t.toTimeString().slice(0, 8);
+    const span = document.createElement("span");
+    span.textContent = (kind === "out" ? "› " : "") + text;
+    span.className = kind === "in" && /VIOLATION|NOT FOUND|OFFLINE|no signal/i.test(text) ? "warn" : kind;
+    row.append(time, span);
+    const box = $("log");
+    const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.append(row);
+    while (box.children.length > 400) box.firstChild.remove();
+    if (atEnd) box.scrollTop = box.scrollHeight;
+  }
+  $("clearLog").onclick = () => { $("log").textContent = ""; logLines.length = 0; };
+
+  function incoming(line) {
+    line = line.replace(/\r/g, "");
+    if (!line.trim()) return;
+    if (line[0] === "#") { parseStateLine(line); return; }
+    log(line, "in");
+    learnFrom(line);
+  }
+
+  /* ================= toast ================= */
+  let toastTimer;
+  function toast(text, bad) {
+    const el = $("toast");
+    el.textContent = text;
+    el.className = "toast" + (bad ? " bad" : "");
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (el.hidden = true), 2600);
+  }
+
+  /* ================= links: Bluetooth or practice ================= */
+  const NUS = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";   // phone → traffic light
+  const TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";   // traffic light → phone
+  const link = { kind: "none", send: async () => false };
+  let device = null, rxChar = null, rxBuf = "", writeChain = Promise.resolve(), pollTimer = null;
+  const enc = new TextEncoder(), dec = new TextDecoder();
+
+  function setPill(kind, text) {
+    $("pill").dataset.s = kind;
+    $("pillText").textContent = text;
+    const on = link.kind !== "none";
+    $("connectBtn").dataset.on = on ? "1" : "0";
+    $("connectBtn").textContent = link.kind === "ble" ? "Disconnect" : link.kind === "sim" ? "End practice" : "Connect";
+    $("track").hidden = $("track2").hidden = link.kind !== "sim";
+    render();
+  }
+
+  function bluetoothProblem() {
+    if (!("bluetooth" in navigator)) {
+      return "This browser can't use Bluetooth. On Android, open the app in Chrome. On an iPhone, use the Bluefy browser.";
+    }
+    try {
+      const fp = document.featurePolicy || document.permissionsPolicy;
+      if (fp && fp.allowsFeature && !fp.allowsFeature("bluetooth")) {
+        return "Bluetooth is blocked while the app is shown inside Claude. Open the installed app instead, or use Practice mode here.";
+      }
+    } catch {}
+    return "";
+  }
+
+  async function connectBle() {
+    const problem = bluetoothProblem();
+    if (problem) { toast(problem, true); log(problem, "sys"); return; }
+    setPill("busy", "Connecting");
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "TrafficLight" }, { services: [NUS] }],
+        optionalServices: [NUS],
+      });
+      device.addEventListener("gattserverdisconnected", onBleGone);
+      const server = await device.gatt.connect();
+      const svc = await server.getPrimaryService(NUS);
+      rxChar = await svc.getCharacteristic(RX);
+      const tx = await svc.getCharacteristic(TX);
+      tx.addEventListener("characteristicvaluechanged", (e) => {
+        rxBuf += dec.decode(e.target.value);
+        let i;
+        while ((i = rxBuf.indexOf("\n")) >= 0) { incoming(rxBuf.slice(0, i)); rxBuf = rxBuf.slice(i + 1); }
+      });
+      await tx.startNotifications();
+      link.kind = "ble";
+      link.send = bleSend;
+      setPill("ble", "Connected · " + (device.name || "TrafficLight"));
+      log("Connected to " + (device.name || "TrafficLight"), "sys");
+      toast("Connected to the traffic light");
+      startPolling();
+      setTimeout(() => link.send("J", true), 600);
+    } catch (e) {
+      const msg = e && e.name === "NotFoundError" ? "No traffic light chosen." :
+        e && e.name === "SecurityError" ? "Bluetooth is not allowed here. Open the installed app, or use Practice mode." :
+        "Could not connect: " + (e && e.message ? e.message : e);
+      link.kind = "none";
+      setPill("off", "Offline");
+      toast(msg, true);
+      log(msg, "sys");
+    }
+  }
+
+  function onBleGone() {
+    if (link.kind !== "ble") return;
+    stopPolling();
+    link.kind = "none";
+    setPill("off", "Offline");
+    log("Bluetooth disconnected", "sys");
+    toast("Lost the traffic light. Tap Connect to try again.", true);
+  }
+
+  function bleSend(cmd, quiet) {
+    if (!rxChar) return Promise.resolve(false);
+    const bytes = enc.encode(cmd + "\n");
+    writeChain = writeChain.then(async () => {
+      for (let i = 0; i < bytes.length; i += 20) {
+        const part = bytes.slice(i, i + 20);
+        if (rxChar.writeValueWithoutResponse) await rxChar.writeValueWithoutResponse(part);
+        else await rxChar.writeValue(part);
+      }
+    }).catch((e) => log("Send failed: " + e.message, "sys"));
+    return writeChain.then(() => true);
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(() => { if (!document.hidden && link.kind !== "none") link.send("J", true); }, 1500);
+  }
+  function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+  $("connectBtn").onclick = () => {
+    if (link.kind === "ble") { try { device && device.gatt.disconnect(); } catch {} onBleGone(); return; }
+    if (link.kind === "sim") { $("simToggle").checked = false; stopSim(); return; }
+    connectBle();
+  };
+
+  /* ================= practice mode: a pretend traffic light and car ================= */
+  const R = 0, Yl = 1, G = 2;
+  let sim = null;
+  function startSim() {
+    if (link.kind === "ble") { try { device && device.gatt.disconnect(); } catch {} onBleGone(); }
+    const now = () => performance.now();
+    sim = {
+      light: R, auto: true, night: false, phaseStart: now(), times: [8, 2, 8], speed: 160,
+      cars: [{ st: 0, pos: 10, crossStart: 0, cmd: 0 }, { st: 0, pos: 30, crossStart: 0, cmd: 0 }],
+      waits: 0, viol: 0, crossed: 0,
+      sound: "VOICE", vol: 20, timer: null,
+    };
+    const say = (line) => setTimeout(() => incoming(line), 25);
+    const len = (l) => [sim.times[2], sim.times[1], sim.times[0]][l];   // R, Y, G
+    const setLight = (l, note = "", quiet) => {
+      sim.night = false; sim.light = l; sim.phaseStart = now(); say("LIGHT: " + LIGHTS[l] + note);
+      if (!quiet) simSound([3, 2, 1][l]);
+    };
+    sim.say = say;
+    sim.setLight = setLight;
+    sim.left = () => (!sim.auto || sim.night) ? -1 : Math.max(0, Math.ceil((len(sim.light) * 1000 - (now() - sim.phaseStart)) / 1000));
+    sim.stateLine = () => "#L=" + LIGHTS[sim.light] + ",M=" + (sim.night ? "NIGHT" : sim.auto ? "AUTO" : "MANUAL") + ",N=" + sim.left() +
+      ",C=" + sim.cars[0].st + ",C2=" + sim.cars[1].st + ",X=" + sim.crossed + ",W=" + sim.waits + ",V=" + sim.viol + ",S=" + sim.speed +
+      ",K=" + ["GO", "STOP", "RUSH"][sim.cars[0].cmd] + ",K2=" + ["GO", "STOP", "RUSH"][sim.cars[1].cmd] +
+      ",T=" + sim.times.join("/") + ",Q=" + sim.sound + ",U=" + sim.vol;
+    sim.timer = setInterval(simTick, 100);
+    link.kind = "sim";
+    link.send = simSend;
+    setPill("sim", "Practice mode");
+    log("Practice mode: pretend traffic light and two cars", "sys");
+    say("== SMART TRAFFIC LIGHT ==");
+    say("CAR 1 ONLINE");
+    say("CAR 2 ONLINE");
+    setLight(R, " (auto mode)", true);
+    simSound(8);
+    startPolling();
+  }
+
+  // Practice mode plays the traffic light's sounds on the phone: the same words as the speaker, or beeps
+  const SOUND_WORDS = ["", "Green light. Go.", "Yellow light. Get ready to stop.", "Red light. Stop.", "Warning! Red light violation!",
+    "Pedestrian button pressed. Please wait.", "Red light. Pedestrians may cross.", "Night mode. Flashing yellow. Drive slowly.",
+    "Smart traffic light ready.", "Car connected.", "Warning. Car signal lost.", "Car stopped by phone.", "Car, go.",
+    "Rush mode. The car will ignore the lights.", "Lamp test.", "Phone connected.", "Car waiting at the red light.", "Car crossed safely."];
+  const BEEPS = { 1: [[880, .12], [0, .05], [1320, .18]], 2: [[660, .15], [0, .08], [660, .15]], 3: [[440, .55]],
+    4: [[1800, .12], [1200, .12], [1800, .12], [1200, .12], [1800, .12], [1200, .12]], 8: [[523, .1], [659, .1], [784, .2]],
+    11: [[784, .12], [0, .05], [523, .22]], 12: [[659, .08], [0, .04], [880, .12]], 13: [[988, .15], [784, .15], [988, .15], [784, .15]],
+    horn: [[440, .18], [0, .07], [440, .32]] };
+  let audio = null;
+  function beep(notes, level) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      let t = audio.currentTime + 0.02;
+      notes.forEach(([f, d]) => {
+        if (f) {
+          const o = audio.createOscillator(), g = audio.createGain();
+          o.type = "square"; o.frequency.value = f;
+          g.gain.setValueAtTime(0.08 * level, t); g.gain.setValueAtTime(0, t + d);
+          o.connect(g).connect(audio.destination); o.start(t); o.stop(t + d + 0.01);
+        }
+        t += d;
+      });
+    } catch {}
+  }
+  function simSound(n, force) {
+    return;                                    // no speaker on the traffic light any more
+    const s = sim; if (!s || s.sound === "OFF" || !n) return;
+    if (!force && s.sound === "BEEP" && (n === 16 || n === 17)) return;
+    const level = s.vol / 30;
+    if (s.sound === "BEEP" || !("speechSynthesis" in window)) { beep(BEEPS[n] || [[1000, .12]], level); return; }
+    try {
+      if (n === 4) beep(BEEPS[4], level);
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(SOUND_WORDS[n]);
+      u.volume = Math.max(0.05, level); u.rate = 1;
+      setTimeout(() => { try { speechSynthesis.speak(u); } catch {} }, n === 4 ? 750 : 0);
+    } catch {}
+  }
+  function stopSim() {
+    if (!sim) return;
+    clearInterval(sim.timer);
+    sim = null;
+    stopPolling();
+    link.kind = "none";
+    Object.assign(state, { light: null, mode: "", left: -1, car: -1, car2: -1 });
+    setPill("off", "Offline");
+    log("Practice mode off", "sys");
+  }
+  function simTick() {
+    const s = sim; if (!s) return;
+    const t = performance.now();
+    if (s.auto && !s.night) {
+      const el = t - s.phaseStart;
+      if (s.light === G && el >= s.times[0] * 1000) s.setLight(Yl);
+      else if (s.light === Yl && el >= s.times[1] * 1000) s.setLight(R);
+      else if (s.light === R && el >= s.times[2] * 1000) s.setLight(G);
+    }
+    const carLight = s.night ? G : s.light;
+    s.cars.forEach((c, i) => {        // each car has its own lane and stop line
+      const name = "CAR " + (i + 1);
+      const mayGo = carLight === G || c.cmd === 2;
+      const onLine = c.pos >= 58 && c.pos < 63;
+      let ns = c.st;
+      if (c.cmd === 1) ns = 3;
+      else if (c.st === 3) ns = 0;
+      else if (c.st === 0) { if (onLine) ns = mayGo ? 2 : 1; }
+      else if (c.st === 1) { if (mayGo) ns = 2; }
+      else if (c.st === 2) { if (t - c.crossStart > 1200 && !onLine) ns = 0; }
+      if (ns !== c.st) {
+        c.st = ns;
+        if (ns === 2) {
+          c.crossStart = t; s.crossed++;
+          if (s.light === R && !s.night) { s.viol++; s.say("!!! RED LIGHT VIOLATION !!! (" + name + ", " + s.viol + " total)"); simSound(4); }
+          else { s.say(name + " CROSSED on " + LIGHTS[s.light] + "  (passed: " + s.crossed + ")"); simSound(17); }
+        } else {
+          if (ns === 1) { s.waits++; simSound(16); }
+          s.say(name + ": " + ["driving", "WAITING at stop line", "crossing", "stopped by phone", "stopped - no signal"][ns]);
+        }
+      }
+      if (c.st === 0 || c.st === 2) {
+        const sp = s.night ? Math.min(s.speed, 110) : s.speed;
+        c.pos += (sp / 255) * 1.6 * (i ? 0.8 : 1);
+        if (c.pos >= 100) c.pos -= 100;
+      }
+      $(i ? "trackCar2" : "trackCar").style.left = c.pos + "%";
+    });
+  }
+  function simSend(cmd, quiet) {
+    const s = sim; if (!s) return Promise.resolve(false);
+    const c = cmd.trim().toUpperCase();
+    const num = (p, lo, hi) => { const v = parseInt(c.slice(p.length), 10); return Math.max(lo, Math.min(hi, isNaN(v) ? lo : v)); };
+    const say = s.say;
+    if (["R", "RED"].includes(c)) { s.auto = false; s.setLight(R, " (manual)"); }
+    else if (["Y", "YELLOW"].includes(c)) { s.auto = false; s.setLight(Yl, " (manual)"); }
+    else if (["G", "GREEN"].includes(c)) { s.auto = false; s.setLight(G, " (manual)"); }
+    else if (["A", "AUTO"].includes(c)) { s.auto = true; s.setLight(R, " (auto mode)"); }
+    else if (["N", "NEXT"].includes(c)) s.setLight({ [G]: Yl, [Yl]: R, [R]: G }[s.light], " (next)");
+    else if (["P", "PED", "WALK"].includes(c)) {
+      if (s.night || s.light === G) { s.auto = true; s.setLight(Yl, " (pedestrian button)", true); simSound(5); }
+      else if (s.light === Yl) { say("PEDESTRIANS: red is coming - wait"); simSound(5); }
+      else { s.phaseStart = performance.now(); say("PEDESTRIANS: red now - safe to cross"); simSound(6); }
+    }
+    else if (c === "NIGHT") { s.auto = false; s.night = true; s.light = Yl; say("NIGHT MODE: flashing yellow, car drives slowly"); simSound(7); }
+    else if (c === "TEST") { say("LAMP TEST"); simSound(14); }
+    else if (/^(STOP|GO|RUSH) ?[12]?$/.test(c)) {
+      const [, w, n] = c.match(/^(STOP|GO|RUSH) ?([12])?$/);
+      (n ? [s.cars[+n - 1]] : s.cars).forEach((car) => (car.cmd = { STOP: 1, GO: 0, RUSH: 2 }[w]));
+      say((n ? "CAR " + n + " CMD: " : "CAR CMD: ") + { STOP: "STOP", GO: "GO (obeys lights)", RUSH: "RUSH (ignores lights!)" }[w]);
+      simSound({ STOP: 11, GO: 12, RUSH: 13 }[w]);
+    }
+    else if (["VOICE", "SOUND"].includes(c)) { s.sound = "VOICE"; say("SOUND: voice announcements"); simSound(8, true); }
+    else if (["BEEP", "BEEPS"].includes(c)) { s.sound = "BEEP"; say("SOUND: beeps only"); simSound(8, true); }
+    else if (["MUTE", "QUIET"].includes(c)) { s.sound = "OFF"; try { speechSynthesis.cancel(); } catch {} say("SOUND: off (traffic light and car)"); }
+    else if (c.startsWith("VOL=")) { s.vol = num("VOL=", 0, 30); say("Volume = " + s.vol); simSound(8, true); }
+    else if (c.startsWith("SAY=")) { const n = num("SAY=", 1, 17); say("Playing sound " + n); simSound(n, true); }
+    else if (/^(HORN|HONK) ?[12]?$/.test(c)) {
+      const n = c.match(/[12]$/);
+      say("HONK HONK" + (n ? " (car " + n[0] + ")" : "")); if (s.sound !== "OFF") beep(BEEPS.horn, s.vol / 30);
+    }
+    else if (c === "FASTER") { s.speed = Math.min(255, s.speed + 20); say("Car speed = " + s.speed); }
+    else if (c === "SLOWER") { s.speed = Math.max(100, s.speed - 20); say("Car speed = " + s.speed); }
+    else if (c.startsWith("SPEED=")) { s.speed = num("SPEED=", 100, 255); say("Car speed = " + s.speed); }
+    else if (c.startsWith("GREEN=")) { s.times[0] = num("GREEN=", 1, 60); say("Green time = " + s.times[0] + " s"); }
+    else if (c.startsWith("YELLOW=")) { s.times[1] = num("YELLOW=", 1, 10); say("Yellow time = " + s.times[1] + " s"); }
+    else if (c.startsWith("RED=")) { s.times[2] = num("RED=", 1, 60); say("Red time = " + s.times[2] + " s"); }
+    else if (c === "PING") say("PONG - traffic light online, car 1 online, car 2 online");
+    else if (["J", "STATE"].includes(c)) say(s.stateLine());
+    else if (["S", "STATUS"].includes(c)) {
+      ["------ STATUS ------", "Mode: " + (s.night ? "NIGHT" : s.auto ? "AUTO" : "MANUAL") + "  Light: " + LIGHTS[s.light],
+       "Times G/Y/R: " + s.times.join("/") + " s",
+       ...s.cars.map((car, i) => "Car " + (i + 1) + ": " + ["driving", "WAITING at stop line", "crossing", "stopped by phone", "stopped - no signal"][car.st] + "  (" + ["GO", "STOP", "RUSH"][car.cmd] + ")"),
+       "Car speed: " + s.speed, "Crossed: " + s.crossed + "  Waited: " + s.waits,
+       "Red-light violations: " + s.viol, "Sound: " + s.sound + "  volume " + s.vol, "--------------------"].forEach(say);
+    }
+    else if (c === "RESET") { s.crossed = s.waits = s.viol = 0; say("Counters reset"); }
+    else if (["H", "HELP", "?"].includes(c)) ["COMMANDS:", "A = auto cycle", "R / Y / G = force colour", "NEXT  PED  NIGHT  TEST", "STOP / GO / RUSH", "FASTER / SLOWER  SPEED=160", "GREEN=8 YELLOW=2 RED=8", "STOP1 GO2 ... = one car", "S  J  PING  RESET", "MUTE (car buzzers)", "HORN (HORN1/HORN2)"].forEach(say);
+    else say("Unknown: " + c + " (send H)");
+    return Promise.resolve(true);
+  }
+  $("simToggle").onchange = (e) => (e.target.checked ? startSim() : stopSim());
+
+  /* ================= sending commands ================= */
+  const VALID = /^(A|AUTO|R|RED|Y|YELLOW|G|GREEN|N|NEXT|P|PED|WALK|NIGHT|TEST|STOP|GO|RUSH|FASTER|SLOWER|PING|S|STATUS|J|STATE|RESET|H|HELP|\?|VOICE|SOUND|BEEP|BEEPS|MUTE|QUIET|HORN|HONK|(?:STOP|GO|RUSH|HORN|HONK) ?[12]|SPEED=\d{1,3}|GREEN=\d{1,2}|YELLOW=\d{1,2}|RED=\d{1,2}|VOL=\d{1,2}|SAY=\d{1,2})$/;
+  async function send(cmd) {
+    cmd = String(cmd).trim().toUpperCase().replace(/\s*=\s*/, "=");
+    if (!cmd) return false;
+    if (link.kind === "none") { toast("Not connected. Tap Connect, or turn on Practice mode in Settings.", true); return false; }
+    log(cmd, "out");
+    const ok = await link.send(cmd);
+    setTimeout(() => link.kind !== "none" && link.send("J", true), 350);
+    return ok;
+  }
+
+  let carTarget = "";              // "" = both cars, "1" or "2" = one car
+  document.querySelectorAll("#carPick button").forEach((b) => {
+    b.onclick = () => {
+      carTarget = b.dataset.target;
+      document.querySelectorAll("#carPick button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    };
+  });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-c]");
+    if (b) send(b.dataset.c + (b.hasAttribute("data-per-car") ? carTarget : ""));
+  });
+
+  let resetArmed = 0;
+  $("resetBtn").onclick = () => {
+    if (Date.now() - resetArmed < 2500) { resetArmed = 0; $("resetBtn").querySelector("b").textContent = "Reset counts"; send("RESET"); return; }
+    resetArmed = Date.now();
+    $("resetBtn").querySelector("b").textContent = "Tap again to reset";
+    setTimeout(() => { $("resetBtn").querySelector("b").textContent = "Reset counts"; }, 2500);
+  };
+
+  var speedDragging = false, speedTimer;
+  $("speed").addEventListener("input", (e) => { speedDragging = true; $("speedOut").textContent = e.target.value; });
+  $("speed").addEventListener("change", (e) => {
+    clearTimeout(speedTimer);
+    state.speed = +e.target.value;
+    speedTimer = setTimeout(async () => { await send("SPEED=" + e.target.value); setTimeout(() => (speedDragging = false), 900); }, 120);
+  });
+
+  var volDragging = false, volTimer;
+  $("vol").addEventListener("input", (e) => { volDragging = true; $("volOut").textContent = e.target.value; });
+  $("vol").addEventListener("change", (e) => {
+    clearTimeout(volTimer);
+    state.vol = +e.target.value;
+    volTimer = setTimeout(async () => { await send("VOL=" + e.target.value); setTimeout(() => (volDragging = false), 900); }, 120);
+  });
+
+  const stepTimers = {};
+  var pendingTimes = {};
+  document.querySelectorAll("[data-step]").forEach((b) => {
+    b.onclick = () => {
+      const name = b.dataset.step, i = { GREEN: 0, YELLOW: 1, RED: 2 }[name];
+      const max = name === "YELLOW" ? 10 : 60;
+      const base = i in pendingTimes ? pendingTimes[i] : state.times[i];
+      pendingTimes[i] = Math.max(1, Math.min(max, base + +b.dataset.d));
+      state.times[i] = pendingTimes[i];
+      render();
+      clearTimeout(stepTimers[name]);
+      stepTimers[name] = setTimeout(async () => {
+        const v = pendingTimes[i];
+        await send(name + "=" + v);
+        setTimeout(() => { if (pendingTimes[i] === v) delete pendingTimes[i]; }, 900);
+      }, 450);
+    };
+  });
+
+  $("term").onsubmit = (e) => { e.preventDefault(); const v = $("raw").value; if (v.trim()) { send(v); $("raw").value = ""; } };
+
+  /* ================= demo steps ================= */
+  const STEPS = [
+    { who: "When Harshit puts the car at the start", quote: "First, the light is red. Watch the car drive up to the black line and stop there.", acts: [["Hold red", "R"]] },
+    { who: "When Tanzil says “Second”", quote: "Second, the light turns green. The car drives through, and the phone shows that it crossed.", acts: [["Hold green", "G"]] },
+    { who: "When Harshit puts the car back and it drives off", quote: "Third, Aashiq is sending STOP from the phone, and the car brakes straight away.", acts: [["Stop", "STOP"], ["then Go", "GO"]] },
+    { who: "Before the car goes back on the track, then when it waits at the line", quote: "And finally, the light is red again, but Aashiq has sent RUSH, so the car ignores the light and drives through.", acts: [["Hold red", "R"], ["then Rush", "RUSH"]] },
+    { who: "When Tanzil asks what the phone says", quote: "Aashiq, what does the phone say?", say: "Say: “It says: red light violation.”", acts: [["Go", "GO"], ["Auto cycle", "A"]] },
+  ];
+  function renderSteps() {
+    const box = $("steps"); box.textContent = "";
+    const done = new Set(JSON.parse(store.get("steps", "[]")));
+    STEPS.forEach((s, i) => {
+      const el = document.createElement("article");
+      el.className = "step" + (done.has(i) ? " done" : "");
+      const h = document.createElement("header");
+      const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
+      const w = document.createElement("span"); w.className = "who"; w.textContent = s.who;
+      h.append(n, w);
+      const q = document.createElement("blockquote"); q.textContent = "Tanzil: “" + s.quote + "”";
+      const a = document.createElement("div"); a.className = "acts";
+      if (s.say) { const sy = document.createElement("span"); sy.className = "say"; sy.textContent = s.say; a.append(sy); }
+      s.acts.forEach(([label, c], k) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "cmd" + (c === "STOP" ? " fill-red" : c === "GO" ? " fill-green" : c === "RUSH" ? " warn" : "");
+        b.innerHTML = "<b></b><code></code>";
+        b.querySelector("b").textContent = label; b.querySelector("code").textContent = c;
+        b.onclick = () => {
+          send(c);
+          if (k === s.acts.length - 1) { done.add(i); store.set("steps", JSON.stringify([...done])); el.classList.add("done"); }
+        };
+        a.append(b);
+      });
+      el.append(h, q, a);
+      box.append(el);
+    });
+  }
+  $("resetSteps").onclick = () => { store.set("steps", "[]"); renderSteps(); };
+  renderSteps();
+  // demo buttons call send() themselves; stop the generic [data-c] handler from double-sending
+  // (they carry no data-c attribute, so nothing to do here)
+
+  /* ================= AI ================= */
+  const PROJECT = `PROJECT FACTS (Smart Traffic Light & Mini Car, a school project):
+- Traffic light: ESP32-S3 board running MicroPython (traffic_light.py saved as main.py). Red, yellow and green LEDs on GPIO 21, 47 and 14, each through a 220-ohm resistor. nRF24L01 radio on SoftSPI (CE 1, CSN 39, SCK 42, MOSI 41, MISO 40), powered from 3.3 V only, with a 10 µF capacitor.
+- Two mini cars, car 1 and car 2, each with its own lane and stop line in front of the light. Both run the same car.py; only the line CAR_ID = 1 or CAR_ID = 2 differs. Car 1 listens on radio address CAR01 and car 2 on CAR02; the light sends to both 5 times a second.
+- Each mini car: Raspberry Pi Pico running MicroPython (car.py as main.py). L298N motor driver on GP2-GP7 (ENA, IN1-IN4, ENB), two gear motors, TCRT5000 infrared line sensor on GP15, its own nRF24L01 on SPI0 (SCK 18, MOSI 19, MISO 16, CSN 17, CE 20), two 18650 batteries (about 7.4 V).
+- Radio: channel 108, 1 Mbps, 8-byte messages packed with struct "<BBBBBBH": ID 0x7A, sender (1 light, 2 car), light colour, car command, speed, car state, crossing counter. The light sends 5 times a second, the car replies 3 times a second.
+- Car logic: a state machine. DRIVING; at the black stop line it checks the light: green -> CROSSING, red or yellow -> WAITING until green. 1.2 s after crossing it is DRIVING again. Safety: no radio for 1 s -> brake; STOP from the phone -> brake. The line must be seen twice in a row (no flicker). A crossing on red is counted as a red-light violation.
+- No speaker on the traffic light (it was taken out of the project). Each car has its own small buzzer that beeps for its events and honks on HORN; MUTE silences the car buzzers.
+- Car buzzer: a passive buzzer on the Pico's GP14 (through 100 Ω) plays tunes without stopping the car: start-up, light found, braking at red, crossing on green, phone stop, RUSH, a siren for a red-light violation, signal lost, and a horn. MUTE silences it too.
+- Phone: this app talks to the traffic light over Bluetooth Low Energy (Nordic UART service, device name TrafficLight). The light forwards everything to and from the car.
+- Code style: both programs loop every few milliseconds and never use long sleep(), so the light can count down, talk to the car and listen to the phone at once.
+- Team: Tanzil (main speaker), Hashir (parts, circuits, testing), Aashiq (the code, works the phone in the demo), Kaushal (radio, phone control, future work), Harshit (moves the car in the demo), Sathwik and Dhiyas.
+TRAFFIC LIGHT COMMANDS: A auto cycle | R, Y, G hold a colour | NEXT next colour now | PED pedestrian button (green ends early, or a full red) | NIGHT flashing yellow, car drives slowly | TEST lamp test | STOP both cars brake | GO both cars drive and obey lights | RUSH both cars ignore lights (red-light test) | add 1 or 2 for one car only: STOP1, GO2, RUSH1, HORN2 | FASTER, SLOWER speed +/-20 | SPEED=100..255 | GREEN=1..60, YELLOW=1..10, RED=1..60 seconds | MUTE silences the car buzzers | HORN both cars honk | S status | PING check | RESET zero the counters.`;
+
+  const RULES = `You are the AI inside the Smart Traffic Light Remote phone app, made by a school team. Talk to the user like a friendly, clear expert.
+- Answer ANY question the user asks: about this project, electronics, coding, science, school work, general knowledge, anything. Keep answers short and easy to read on a phone (usually under 120 words, plain text, no markdown tables) unless the user asks for more detail. Answer in the user's language.
+- You can also control the real traffic light and car. When the user asks for an action, put the exact commands to send, in order, in "commands". Use only the commands listed in the facts. Use RUSH or RESET only when the user clearly asks for them. Use NEXT, timings and SPEED to do things like "make green longer" or "slow the car down". Leave "commands" empty for questions.
+- Use the live status to explain what is happening right now (for example why the car stopped).
+Reply with only this JSON: {"reply": "<your answer>", "commands": ["<command>", ...]}
+
+${PROJECT}`;
+
+  let sampleFn = null;
+  let history = [];          // {role: "user"|"assistant", content}
+  let aiBusy = null;
+  const chat = $("chat");
+
+  function liveStatus() {
+    if (link.kind === "none") return "LIVE STATUS: the app is not connected to the traffic light right now.";
+    const car = (state.car >= 0 ? CAR_TEXT[state.car] : "offline") + ` (car 1, command ${state.cmd}); car 2 ` +
+      (state.car2 >= 0 ? CAR_TEXT[state.car2] : "offline") + ` (command ${state.cmd2})`;
+    const recent = logLines.slice(-8).map((l) => (l.kind === "out" ? "> " : "") + l.text).join(" | ");
+    return `LIVE STATUS (${link.kind === "sim" ? "practice mode" : "real hardware"}): light ${state.light || "unknown"}, mode ${state.mode || "unknown"}, ` +
+      `${state.left >= 0 ? state.left + " s until it changes, " : ""}car 1 ${car}, speed ${state.speed}, ` +
+      `times green/yellow/red ${state.times.join("/")} s, crossed ${state.crossed}, waited ${state.waited}, red-light violations ${state.viol}. Recent messages: ${recent}`;
+  }
+
+  function engineName() { return sampleFn ? "claude" : (store.get("gemKey", "") ? "gemini" : "basic"); }
+  function showEngine() {
+    const e = engineName();
+    const el = $("engine");
+    el.textContent = "";
+    const b = document.createElement("b");
+    b.textContent = e === "claude" ? "Claude" : e === "gemini" ? "Google Gemini" : "Basic mode";
+    el.append("AI: ", b, e === "basic"
+      ? " · understands traffic light commands. For full answers, add a free Gemini key in Settings."
+      : " · answers anything and can run the traffic light for you.");
+  }
+
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("sample").then((s) => { sampleFn = s || null; showEngine(); }).catch(() => {});
+  }
+
+  function bubble(kind, text) {
+    const el = document.createElement("div");
+    el.className = "msg " + kind;
+    el.textContent = text;
+    chat.append(el);
+    el.scrollIntoView({ block: "end", behavior: "smooth" });
+    return el;
+  }
+
+  // "Report this answer": lets people flag an AI answer without leaving the app
+  function addReport(el, question, answer) {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "report"; btn.textContent = "Report this answer";
+    btn.onclick = () => {
+      btn.remove();
+      const box = document.createElement("div");
+      box.className = "reportbox";
+      const lbl = document.createElement("span"); lbl.textContent = "What's wrong with it?";
+      const opts = document.createElement("div"); opts.className = "opts";
+      let reason = "";
+      ["Offensive", "Unsafe", "Wrong", "Something else"].forEach((r) => {
+        const o = document.createElement("button"); o.type = "button"; o.textContent = r; o.setAttribute("aria-pressed", "false");
+        o.onclick = () => { reason = r; opts.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === o))); finish(); };
+        opts.append(o);
+      });
+      const done = document.createElement("span");
+      function finish() {
+        done.textContent = "";
+        try {
+          const list = JSON.parse(store.get("reports", "[]"));
+          list.push({ at: new Date().toISOString(), reason, question: question.slice(0, 300), answer: answer.slice(0, 600) });
+          store.set("reports", JSON.stringify(list.slice(-50)));
+        } catch {}
+        const form = CONFIG && CONFIG.reportForm;
+        const email = CONFIG && CONFIG.contactEmail;
+        if (form && /^https:\/\/docs\.google\.com\/forms\//.test(form)) {
+          // A Google Form "pre-filled link" whose answers were typed as REASON, QUESTION and ANSWER
+          const url = form.replace("/viewform", "/formResponse")
+            .replace("REASON", encodeURIComponent(reason))
+            .replace("QUESTION", encodeURIComponent(question.slice(0, 500)))
+            .replace("ANSWER", encodeURIComponent(answer.slice(0, 1500)));
+          fetch(url, { method: "POST", mode: "no-cors" })
+            .then(() => { done.textContent = "Thanks. Your report was sent to the app team."; })
+            .catch(() => { done.textContent = "Couldn't send the report right now. It's saved on this phone."; });
+          done.textContent = "Sending your report…";
+        } else if (email) {
+          const a = document.createElement("a");
+          a.className = "send";
+          a.href = "mailto:" + email + "?subject=" + encodeURIComponent("AI answer report: " + reason) +
+            "&body=" + encodeURIComponent("Question: " + question + "\n\nAnswer: " + answer + "\n\nReason: " + reason);
+          a.textContent = "Send the report to the app team";
+          done.append("Thanks. ", a, " (or email " + email + ").");
+        } else {
+          done.textContent = "Thanks. The report is saved on this phone, and the answer is hidden.";
+        }
+        el.firstChild.textContent = "(You reported this answer as: " + reason.toLowerCase() + ".)";
+      }
+      box.append(lbl, opts, done);
+      el.append(box);
+    };
+    el.append(btn);
+  }
+
+  function basicCommands(text) {
+    const t = text.toLowerCase();
+    const raw = text.trim().toUpperCase().replace(/\s*=\s*/, "=");
+    if (VALID.test(raw)) return [raw];
+    const out = [];
+    let m;
+    if ((m = t.match(/\b(green|yellow|amber|red)\b\D{0,24}?(\d{1,2})\s*(s\b|sec|second)/))) {
+      out.push((m[1] === "amber" ? "YELLOW" : m[1].toUpperCase()) + "=" + m[2]);
+      return out;
+    }
+    if ((m = t.match(/speed\D{0,12}(\d{2,3})/))) return ["SPEED=" + m[1]];
+    if (/\bnight\b/.test(t)) out.push("NIGHT");
+    else if (/\b(pedestrian|walk|people (want to )?cross)\b/.test(t)) out.push("PED");
+    else if (/\b(auto|automatic|normal cycle|back to normal)\b/.test(t)) out.push("A");
+    else if (/\bnext\b/.test(t)) out.push("NEXT");
+    else if (/\b(lamp test|test the (lights|lamps|leds))\b/.test(t)) out.push("TEST");
+    else if (/\bred\b/.test(t)) out.push("R");
+    else if (/\b(yellow|amber|orange)\b/.test(t)) out.push("Y");
+    else if (/\bgreen\b/.test(t)) out.push("G");
+    if (/\b(rush|ignore the light)\b/.test(t)) out.push("RUSH");
+    else if (/\b(stop|halt|brake|freeze)\b/.test(t)) out.push("STOP");
+    else if (/\b(go|drive|start|move|resume)\b/.test(t)) out.push("GO");
+    if (/\bfaster\b|speed up/.test(t)) out.push("FASTER");
+    if (/\bslower\b|slow (it )?down/.test(t)) out.push("SLOWER");
+    if (/\b(status|what'?s happening|report)\b/.test(t)) out.push("S");
+    if (/\bping\b/.test(t)) out.push("PING");
+    if ((m = t.match(/\bvolume\D{0,12}(\d{1,2})\b/))) out.push("VOL=" + Math.min(30, +m[1]));
+    else if (/\b(louder|volume up|turn (it )?up)\b/.test(t)) out.push("VOL=" + Math.min(30, state.vol + 5));
+    else if (/\b(quieter|softer|volume down|turn (it )?down)\b/.test(t)) out.push("VOL=" + Math.max(0, state.vol - 5));
+    if (/\b(mute|silence|silent|no sound|sound off)\b/.test(t)) out.push("MUTE");
+    else if (/\bbeeps?\b/.test(t)) out.push("BEEP");
+    else if (/\b(voice mode|sound on|unmute|turn on (the )?(voice|sound|speaker))\b/.test(t)) out.push("VOICE");
+    if (/\b(horn|honk|hoot)\b/.test(t)) out.push("HORN");
+    const which = /\b(car ?(1|one)|first car)\b/.test(t) ? "1" : /\b(car ?(2|two)|second car)\b/.test(t) ? "2" : "";
+    if (which) return out.map((c) => (["STOP", "GO", "RUSH", "HORN"].includes(c) ? c + which : c));
+    if (/\breset\b/.test(t)) out.push("RESET");
+    return out;
+  }
+
+  async function askGemini(turns) {
+    const key = store.get("gemKey", "");
+    const model = store.get("gemModel", "gemini-flash-latest") || "gemini-flash-latest";
+    const contents = turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.content }] }));
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: RULES }] },
+        contents,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: { type: "OBJECT", properties: { reply: { type: "STRING" }, commands: { type: "ARRAY", items: { type: "STRING" } } }, required: ["reply", "commands"] },
+        },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const why = (data.error && data.error.message) || res.statusText;
+      throw new Error(res.status === 400 || res.status === 403 ? "Gemini refused the key or model: " + why : "Gemini error: " + why);
+    }
+    const text = (((data.candidates || [])[0] || {}).content || {}).parts?.map((p) => p.text || "").join("") || "";
+    try { return JSON.parse(text); } catch { return { reply: text || "No answer came back.", commands: [] }; }
+  }
+
+  async function askClaude(turns) {
+    const input = [{ role: "user", content: RULES }, ...turns];
+    return await sampleFn.json(input, { modelTier: "quick", cache: false, signal: aiBusy.signal });
+  }
+
+  async function runCommands(cmds, el) {
+    const ok = cmds.map((c) => String(c).trim().toUpperCase().replace(/\s*=\s*/, "=")).filter((c) => VALID.test(c));
+    if (!ok.length) return;
+    const box = document.createElement("div");
+    box.className = "sent";
+    el.append(box);
+    if (link.kind === "none") {
+      const r = document.createElement("span"); r.className = "res";
+      r.textContent = "Not connected, so nothing was sent. Connect, or turn on Practice mode, then ask again.";
+      ok.forEach((c) => { const code = document.createElement("code"); code.textContent = c; box.append(code); });
+      box.append(r);
+      return;
+    }
+    const before = logLines.length;
+    for (const c of ok) {
+      const code = document.createElement("code"); code.textContent = "› " + c; box.append(code);
+      await send(c);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    await new Promise((r) => setTimeout(r, 450));
+    const replies = logLines.slice(before).filter((l) => l.kind === "in").map((l) => l.text).slice(0, 6);
+    if (replies.length) { const r = document.createElement("span"); r.className = "res"; r.textContent = replies.join("\n"); box.append(r); }
+  }
+
+  function speak(text) {
+    if (!$("voiceToggle").checked || !("speechSynthesis" in window)) return;
+    try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch {}
+  }
+
+  async function ask(text) {
+    text = text.trim();
+    if (!text || aiBusy) return;
+    bubble("me", text);
+    const el = bubble("ai thinking", "Thinking…");
+    const engine = engineName();
+    aiBusy = new AbortController();
+    $("sendBtn").disabled = true;
+    try {
+      let answer;
+      if (engine === "basic") {
+        const cmds = basicCommands(text);
+        answer = cmds.length
+          ? { reply: "Done. Sending " + cmds.join(", ") + ".", commands: cmds }
+          : { reply: "In basic mode I only understand traffic light requests, like “turn it green”, “stop the car” or “green for 15 seconds”. To ask me anything else, add a free Gemini key in Settings.", commands: [] };
+      } else {
+        const turns = [...history.slice(-10), { role: "user", content: liveStatus() + "\n\nUSER: " + text }];
+        answer = engine === "claude" ? await askClaude(turns) : await askGemini(turns);
+      }
+      const reply = String((answer && answer.reply) || "I couldn't put an answer together. Try asking another way.");
+      el.className = "msg ai";
+      el.textContent = reply;
+      history.push({ role: "user", content: text }, { role: "assistant", content: reply });
+      if (history.length > 20) history = history.slice(-20);
+      await runCommands(Array.isArray(answer && answer.commands) ? answer.commands : [], el);
+      if (engine !== "basic") addReport(el, text, reply);
+      speak(reply);
+    } catch (e) {
+      el.className = "msg ai";
+      const code = e && e.code;
+      if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled") {
+        sampleFn = null; showEngine();
+        el.textContent = "Claude isn't allowed to answer here, so I've switched to " + (engineName() === "gemini" ? "Gemini" : "basic mode") + ". Ask again.";
+      } else if (code === "rate_limited") el.textContent = "Too many questions at once. Wait a moment, then ask again.";
+      else if (code === "cancelled") el.textContent = (e.text || "") + " (stopped)";
+      else el.textContent = (e && e.message) || "Something went wrong. Try again.";
+    } finally {
+      aiBusy = null;
+      $("sendBtn").disabled = false;
+      el.scrollIntoView({ block: "end", behavior: "smooth" });
+    }
+  }
+
+  const CHIPS = ["Turn it green for 15 seconds", "Why did the car stop?", "Make the car slower", "How does the radio message work?", "Explain PWM simply", "What is a state machine?"];
+  CHIPS.forEach((c) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = c;
+    b.onclick = () => ask(c);
+    $("chips").append(b);
+  });
+  bubble("ai", "Hi! Ask me anything: about the project, the code, school work or anything else. I can also run the traffic light for you. Try “turn it green for 15 seconds” or “why did the car stop?”");
+
+  $("composer").onsubmit = (e) => { e.preventDefault(); const v = $("ask").value; $("ask").value = ""; autosize(); ask(v); };
+  $("ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); } });
+  function autosize() { const t = $("ask"); t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; }
+  $("ask").addEventListener("input", autosize);
+
+  // Voice input where the browser offers it
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    $("micBtn").hidden = false;
+    let rec = null;
+    $("micBtn").onclick = () => {
+      if (rec) { rec.stop(); return; }
+      try {
+        rec = new SR();
+        rec.lang = navigator.language || "en-US";
+        rec.interimResults = true;
+        $("micBtn").classList.add("live");
+        rec.onresult = (ev) => {
+          const r = ev.results[ev.results.length - 1];
+          $("ask").value = r[0].transcript; autosize();
+          if (r.isFinal) { const v = $("ask").value; $("ask").value = ""; autosize(); ask(v); }
+        };
+        rec.onerror = (ev) => toast(ev.error === "not-allowed" ? "The microphone is blocked here. Type your question instead." : "Didn't catch that. Try again.", true);
+        rec.onend = () => { rec = null; $("micBtn").classList.remove("live"); };
+        rec.start();
+      } catch { rec = null; $("micBtn").classList.remove("live"); toast("The microphone isn't available here.", true); }
+    };
+  }
+
+  /* ================= settings ================= */
+  $("gemKey").value = store.get("gemKey", "");
+  $("gemModel").value = store.get("gemModel", "gemini-flash-latest");
+  $("voiceToggle").checked = store.get("voice", "0") === "1";
+  $("voiceToggle").onchange = (e) => store.set("voice", e.target.checked ? "1" : "0");
+  $("saveAi").onclick = () => {
+    store.set("gemKey", $("gemKey").value.trim());
+    store.set("gemModel", $("gemModel").value.trim() || "gemini-flash-latest");
+    showEngine();
+    toast("AI settings saved");
+  };
+  const bp = bluetoothProblem();
+  if (bp) $("bleNote").textContent = bp;
+
+  if (STANDALONE) {
+    $("privacyLine").hidden = false;
+    if (CONFIG.privacyUrl) $("privacyLink").href = CONFIG.privacyUrl;
+    let installEvent = null;
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; $("installBtn").hidden = false; });
+    $("installBtn").onclick = async () => {
+      if (!installEvent) return;
+      installEvent.prompt();
+      try { await installEvent.userChoice; } catch {}
+      installEvent = null; $("installBtn").hidden = true;
+    };
+    if (window.matchMedia && matchMedia("(display-mode: standalone)").matches) {
+      $("installSteps").innerHTML = "<li>The app is installed. Open it from its icon.</li>";
+    }
+  } else {
+    $("installSteps").innerHTML = "<li>You're using the version inside Claude: AI answers come from your Claude account.</li>" +
+      "<li>The Play Store version installs like any other app, and Bluetooth always works there.</li>";
+  }
+
+  /* ================= tabs ================= */
+  function showTab(name) {
+    document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== name));
+    document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+    store.set("tab", name);
+    $("main").scrollTop = 0;
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+  showTab(store.get("tab", "control"));
+
+  showEngine();
+  setPill("off", "Offline");
+  log("Tap Connect to reach the traffic light, or turn on Practice mode in Settings.", "sys");
+  if (store.get("practice", "") === "auto") { $("simToggle").checked = true; startSim(); }
+})();
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+</script>
+</body>
+</html>

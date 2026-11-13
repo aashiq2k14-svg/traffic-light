@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy · Smart Traffic Light Remote</title>
+<meta name="theme-color" content="#14181E">
+<style>
+:root { --bg: #ECE9E1; --surface: #FBFAF7; --fg: #14181E; --muted: #59616C; --accent: #8A5600; --line: #D3CEC1; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0F1216; --surface: #181D24; --fg: #F3F1EB; --muted: #9BA4AF; --accent: #F2B233; --line: #2E3541; color-scheme: dark; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 32px max(18px, env(safe-area-inset-right, 0px)) 48px max(18px, env(safe-area-inset-left, 0px)); }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 18px; margin: 28px 0 6px; color: var(--accent); }
+p, li { max-width: 65ch; }
+.meta { color: var(--muted); margin: 0 0 24px; }
+a { color: var(--accent); }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Smart Traffic Light Remote · Effective 4 November 2026</p>
+
+  <div class="box">
+    <p><b>In short:</b> the app has no accounts, no ads and no tracking. It talks to your own traffic light over Bluetooth. If you choose to use the AI with your own Google Gemini key, your questions go to Google to be answered.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>Smart Traffic Light Remote is a school project app made by the Smart Traffic Light team. It controls a model traffic light (an ESP32-S3 board) and a mini car (a Raspberry Pi Pico).</p>
+
+  <h2>Bluetooth</h2>
+  <p>The app uses Bluetooth only to connect to the traffic light you pick, named “TrafficLight”. It sends the commands you choose and shows the messages the traffic light sends back. The app does not store a list of nearby devices and does not use your location.</p>
+
+  <h2>The AI assistant</h2>
+  <p>Without an AI key, the assistant runs entirely on your phone and only understands traffic light commands.</p>
+  <p>If you add your own Google Gemini API key, each question you ask is sent to Google’s Gemini service, together with the traffic light’s current status and the last few messages of your chat, so it can answer. Google handles that data under its own terms and privacy policy (<a href="https://policies.google.com/privacy">policies.google.com/privacy</a>). Your key is stored only on your phone and is sent only to Google.</p>
+
+  <h2>Voice</h2>
+  <p>When you tap the microphone, your phone’s built-in speech recognition turns what you say into text. Depending on your phone, that service may process the audio on Google’s servers. The app does not record or keep audio.</p>
+
+  <h2>Reports</h2>
+  <p>If you report an AI answer, the report (the reason you picked, your question and the answer) is sent to the app team through a Google Form so we can fix problems, and a copy is saved on your phone. Reports don’t include your name, key or any other personal details.</p>
+
+  <h2>What stays on your phone</h2>
+  <p>Your settings (AI key, voice choice, the last open tab and demo progress) are saved in the app’s storage on your phone. Uninstalling the app or clearing its data deletes them. We do not collect, sell or share any personal data.</p>
+
+  <h2>Children</h2>
+  <p>The app is made for students and teachers working on electronics projects. It is not directed at children under 13, and it does not knowingly collect information from anyone.</p>
+
+  <h2>Changes and contact</h2>
+  <p>If this policy changes, the new version will appear on this page with a new date. Questions: contact the app team at the email address shown on the app’s Google Play page.</p>
+</main>
+</body>
+</html>
