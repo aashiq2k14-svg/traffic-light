@@ -1762,7 +1762,7 @@ function sensorWires(W, cx, gap, via, pc, v33, gnd) {
   [['VCC', 'red', v33, 'Breadboard 3V3 row', 'bread'], ['GND', 'black', gnd, 'Breadboard GND row', 'bread'], ['DO', 'yellow', picoPin(pc, 20), 'Pico GP15 (pin 20)', 'pico']]
     .forEach(([n, col, B, to, pid]) => {
       const z = { VCC: -0.254, GND: 0, DO: 0.254 }[n];
-      W('Line sensor', col, 'Sensor ' + n, to, sensorPin(cx, gap, n), B, ['sensor', pid], { via: via(z) });
+      W('Line sensor', col, 'Sensor ' + (n === 'DO' ? 'OUT' : n), to, sensorPin(cx, gap, n), B, ['sensor', pid], { via: via(z) });
     });
 }
 function buzzerWires(W, bz, pc, gnd) {
@@ -1972,7 +1972,7 @@ const CARS = {
       add('battery', '2 × 18650 holder', '7.7 × 4.1 × 2.1 cm', 'Across the plate, just in front of the axle, so the car doesn’t tip back. Red wire goes to the slide switch, black wire to the L298N GND.',
         bat, [-3.05, top + 2.8, 0]);
       const sw = slideSwitch(); sw.position.set(-0.5, top, 4.5);
-      add('switch', 'Slide switch', '1.2 × 0.6 cm, 3 pins', 'In the battery red wire. Use the middle pin and one outer pin: battery + to the middle pin, outer pin to the L298N 12V terminal.',
+      add('switch', 'On/off switch (SPST)', '2 pins', 'In the battery red wire: battery + to one pin, the other pin to the L298N 12V terminal. Either way round works.',
         sw, [-0.5, top + 1.5, 4.5]);
       const drv = l298n(); drv.position.set(-7.65, top, 0);
       add('driver', 'L298N motor driver', '4.3 × 4.3 cm, 2.8 cm tall', 'At the back, over the motors. Take the ENA and ENB jumper caps off. Keep the 5V jumper on.',
@@ -1996,8 +1996,8 @@ const CARS = {
       const W = wire;
       const v33 = r => bbHole(bb, 16, -1, r), gnd = r => bbHole(bb, 14, -1, r);
       const swA = anc(sw, [-0.6, 0.3, 0], [-0.6, 0.8, 0]), swB = anc(sw, [0.6, 0.3, 0], [0.6, 0.8, 0]);
-      W('Power', 'red', 'Battery +', 'Slide switch (middle pin)', batPin(bat, true), swA, ['battery', 'switch']);
-      W('Power', 'red', 'Slide switch (outer pin)', 'L298N 12V', swB, l298(drv, '12V'), ['switch', 'driver'], { via: [[0.4, 5.6, 4.5], [0.4, 6.2, 4.3], [-1.0, 7.6, 3.0], [-5.35, 7.4, -0.9]], arc: false });
+      W('Power', 'red', 'Battery +', 'Switch pin 1', batPin(bat, true), swA, ['battery', 'switch']);
+      W('Power', 'red', 'Switch pin 2', 'L298N 12V', swB, l298(drv, '12V'), ['switch', 'driver'], { via: [[0.4, 5.6, 4.5], [0.4, 6.2, 4.3], [-1.0, 7.6, 3.0], [-5.35, 7.4, -0.9]], arc: false });
       W('Power', 'black', 'Battery −', 'L298N GND', batPin(bat, false), l298(drv, 'GND'), ['battery', 'driver'], { via: [[-3.45, 7.85, 3.6], [-4.2, 7.85, 1.8], [-5.4, 7.05, -0.45]], arc: false });
       W('Power', 'red', 'L298N 5V', 'Pico VSYS (pin 39)', l298(drv, '5V'), picoPin(pc, 39), ['driver', 'pico'], { via: [[-5.37, 6.2, -0.1], [-5.3, 7.4, -0.4], [-0.8, 7.4, -4.6]], arc: false });
       W('Power', 'black', 'L298N GND', 'Pico GND (pin 38)', l298(drv, 'GND'), picoPin(pc, 38), ['driver', 'pico'], { via: [[-5.37, 6.2, -0.6], [-5.25, 7.25, -0.85], [-0.8, 7.25, -4.4]], arc: false });
@@ -2046,7 +2046,7 @@ const CARS = {
       add('battery', '2 × 18650 holder', '7.7 × 4.1 × 2.1 cm', 'Lengthways down the middle, between the front and back axles.',
         bat, [-3.15, top + 2.8, 0]);
       const sw = slideSwitch(); sw.position.set(0.3, top, 4.3);
-      add('switch', 'Slide switch', '1.2 × 0.6 cm', 'In the battery red wire. Battery + to the middle pin; the outer pin feeds the buck converter and the TB6612FNG VM pin.',
+      add('switch', 'Slide switch', '1.2 × 0.6 cm', 'SPST on/off switch in the battery red wire: battery + to one pin; the other pin feeds the buck converter and the TB6612FNG VM pin.',
         sw, [0.3, top + 1.5, 4.3]);
       const bko = buck(); bko.rotation.y = Math.PI; bko.position.set(-4.05, top, 3.8);
       add('buck', 'Buck converter (5 V)', '4.3 × 2.1 × 1.3 cm', 'Turn its screw until it gives 5.0 V before you connect the Pico.',
