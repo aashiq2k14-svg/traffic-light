@@ -334,6 +334,10 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
           <svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect x="1" y="4" width="20" height="8" rx="3" fill="currentColor"/><rect x="5" y="1" width="11" height="5" rx="2" fill="currentColor"/><circle cx="6" cy="13" r="2.4" fill="#F2B233"/><circle cx="16" cy="13" r="2.4" fill="#F2B233"/></svg>
           <span id="carText">Car: waiting for the traffic light</span>
         </div>
+        <div class="carline">
+          <svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><circle cx="11" cy="3" r="2.6" fill="currentColor"/><path d="M11 6v5M11 8l-4 3M11 8l4 3M11 11l-3 4M11 11l3 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+          <span id="pedText">Crossing: —</span>
+        </div>
         <div class="tallies">
           <span><b id="tCrossed">0</b>crossed</span>
           <span><b id="tWaited">0</b>waited</span>
@@ -354,7 +358,7 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
     <div class="unitbar" role="tablist" aria-label="What to control">
       <button type="button" role="tab" data-unit="light" aria-selected="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="4"/><circle cx="12" cy="7" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="17" r="1.6" fill="currentColor"/></svg>Traffic light</button>
       <button type="button" role="tab" data-unit="1" aria-selected="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v-3l2.5-5h13l2.5 5v3z"/><circle cx="7.5" cy="16.5" r="2" fill="currentColor"/><circle cx="16.5" cy="16.5" r="2" fill="currentColor"/></svg>Car 1</button>
-      <button type="button" role="tab" data-unit="2" aria-selected="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v-3l2.5-5h13l2.5 5v3z"/><circle cx="7.5" cy="16.5" r="2" fill="currentColor"/><circle cx="16.5" cy="16.5" r="2" fill="currentColor"/></svg>Car 2</button>
+      <button type="button" role="tab" data-unit="2" aria-selected="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v-3l2.5-5h13l2.5 5v3z"/><circle cx="7.5" cy="16.5" r="2" fill="currentColor"/><circle cx="16.5" cy="16.5" r="2" fill="currentColor"/></svg>Beeper</button>
     </div>
 
     <!-- TRAFFIC LIGHT -->
@@ -375,7 +379,7 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
       <div class="sect">
         <h2>Special functions</h2>
         <div class="grid two">
-          <button class="cmd big emerg" data-c="EMERGENCY" data-mode="EMERGENCY" type="button" aria-pressed="false"><b>Emergency</b><code>flashing red · every car stops</code></button>
+          <button class="cmd big emerg" data-c="EMERGENCY" data-mode="EMERGENCY" type="button" aria-pressed="false"><b>Emergency</b><code>flashing red · cars stop · siren</code></button>
           <button class="cmd big party" data-c="PARTY" data-mode="PARTY" type="button" aria-pressed="false"><b>Party</b><code>light show · tap again to stop</code></button>
         </div>
         <div class="grid two">
@@ -579,7 +583,10 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
       return "Car " + n + ": " + t;
     };
     $("carText").textContent = link.kind === "none" ? "Cars: connect to see them"
-      : carLine(1, state.car, state.cmd) + "\n" + carLine(2, state.car2, state.cmd2);
+      : carLine(1, state.car, state.cmd);
+    const crossOK = L === "RED" && !emerg;
+    $("pedText").textContent = link.kind === "none" || !L ? "Crossing: —"
+      : crossOK ? "Crossing: safe to cross (beeper ticks fast)" : "Crossing: wait (beeper ticks slowly)";
     $("tCrossed").textContent = state.crossed;
     $("tWaited").textContent = state.waited;
     $("tViol").textContent = state.viol;
@@ -597,6 +604,7 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
     $("gbBtn").setAttribute("aria-pressed", String(state.gb));
     renderCars();
+    renderBeeper();
   }
 
   function parseStateLine(line) {          // "#L=RED,M=AUTO,N=5,C=1,X=3,W=2,V=0,S=160,K=GO,T=8/2/8,Q=VOICE,U=22"
@@ -1114,7 +1122,42 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
         <button class="cmd snd mute" data-snd="OFF" type="button" aria-pressed="false"><b>Mute both cars</b><code>tap again to turn the sounds back on</code></button>
       </div>`;
   }
-  [1, 2].forEach((n) => { document.querySelector('[data-unitpanel="' + n + '"]').innerHTML = carUnit(n); });
+  function beeperUnit() {
+    return `
+      <div class="carhero" id="heroB" data-tone="off">
+        <span class="dot"></span>
+        <div><div class="what" id="whatB">Not connected</div>
+        <div class="sub"><span class="chip">Crossing beeper</span><span>Car 2</span></div></div>
+      </div>
+      <div class="sect">
+        <h2>Crossing beeper for blind people</h2>
+        <p class="note">Car 2 does not drive. It stands at the crossing, listens to the traffic light by radio and beeps, so people who can't see the light know when to cross.</p>
+        <div class="tiles">
+          <div class="tile"><span class="k">Cars have red</span><div class="v"><span>tick-tick-tick</span></div><small>fast ticks, LED on: safe to cross</small></div>
+          <div class="tile"><span class="k">Cars have green</span><div class="v"><span>tick … tick</span></div><small>slow ticks: wait</small></div>
+          <div class="tile"><span class="k">Emergency</span><div class="v"><span>tick … tick</span></div><small>wait: an ambulance is coming</small></div>
+          <div class="tile"><span class="k">No signal</span><div class="v"><span>boop</span></div><small>it can't hear the traffic light</small></div>
+        </div>
+      </div>
+      <div class="sect">
+        <h2>Sounds</h2>
+        <p class="note">Press the white BOOTSEL button on car 2 to switch. It beeps 1 to 6 times to say which one: 1 crossing beeper, 2 ambulance, 3 police, 4 fire truck, 5 ice-cream van, 6 quiet.</p>
+      </div>
+      <div class="sect">
+        <h2>Ambulance priority</h2>
+        <p class="note">Emergency on the Traffic light page stops every car, and car 1 plays a siren every 6 seconds, so the ambulance can pass first.</p>
+      </div>`;
+  }
+  document.querySelector('[data-unitpanel="1"]').innerHTML = carUnit(1);
+  document.querySelector('[data-unitpanel="2"]').innerHTML = beeperUnit();
+
+  function renderBeeper() {
+    if (!$("whatB")) return;
+    const connected = link.kind !== "none";
+    const cross = state.light === "RED" && state.mode !== "EMERGENCY";
+    $("whatB").textContent = !connected ? "Not connected" : !state.light ? "Waiting for the traffic light" : cross ? "Safe to cross" : "Wait";
+    $("heroB").dataset.tone = !connected || !state.light ? "off" : cross ? "go" : "wait";
+  }
 
   function renderCars() {
     const connected = link.kind !== "none";
@@ -1280,11 +1323,12 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
 
   /* ================= demo steps ================= */
   const STEPS = [
-    { who: "When Harshit puts the car at the start", quote: "First, the light is red. Watch the car drive up to the black line and stop there.", acts: [["Hold red", "R"]] },
-    { who: "When Tanzil says “Second”", quote: "Second, the light turns green. The car drives through, and the phone shows that it crossed.", acts: [["Hold green", "G"]] },
-    { who: "When Harshit puts the car back and it drives off", quote: "Third, Aashiq is sending STOP from the phone, and the car brakes straight away.", acts: [["Stop", "STOP"], ["then Go", "GO"]] },
-    { who: "Before the car goes back on the track, then when it waits at the line", quote: "And finally, the light is red again, but Aashiq has sent RUSH, so the car ignores the light and drives through.", acts: [["Hold red", "R"], ["then Rush", "RUSH"]] },
-    { who: "When Tanzil asks what the phone says", quote: "Aashiq, what does the phone say?", say: "Say: “It says: red light violation.”", acts: [["Go", "GO"], ["Auto cycle", "A"]] },
+    { who: "Harshit puts car 1 at the start, Dhiyas puts car 2 at the crossing", quote: "The light is red. Watch car 1 drive up to the black line and stop. And listen to car 2: it ticks fast, so people can cross now.", acts: [["Hold red", "R"]] },
+    { who: "When Tanzil says “Now it's green”", quote: "Now it's green. Car 1 drives through, the counter goes up, and the traffic camera counts one more car. Car 2 ticks slowly now: wait.", acts: [["Hold green", "G"]] },
+    { who: "Car 1 back at the start: tap Auto, then Emergency while it drives", quote: "Emergency! The light flashes red, every car stops, and car 1 plays a siren, as if an ambulance is coming.", acts: [["Auto cycle", "A"], ["Emergency", "EMERGENCY"], ["End emergency", "EMERGENCY"]] },
+    { who: "Give the phone to Sathwik (Car 1 page, drive pad)", quote: "Sathwik is driving car 1 from the phone. When he lets go of the arrow, it stops.", acts: [["Remote car 1", "REMOTE1"], ["Horn", "HORN1"], ["Auto", "GO1"]] },
+    { who: "Phone back to Aashiq, car 1 at the start", quote: "The light is red, but car 1 ignores it, as a test. The alarm sounds, the app counts a red-light violation, and the camera takes a photo.", acts: [["Hold red", "R"], ["then Rush", "RUSH1"]] },
+    { who: "Back to normal, then close the app for Ultron", quote: "And now Aashiq uses his voice: Ultron controls the light, the car and the traffic camera.", say: "Say: “Ultron, turn the traffic light red… move the car 15 centimetres… let the car drive… show the traffic camera.”", acts: [["Go", "GO1"], ["Auto cycle", "A"]] },
   ];
   function renderSteps() {
     const box = $("steps"); box.textContent = "";
@@ -1322,7 +1366,9 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
   /* ================= AI ================= */
   const PROJECT = `PROJECT FACTS (Smart Traffic Light & Mini Car, a school project):
 - Traffic light: ESP32-S3 board running MicroPython (traffic_light.py saved as main.py). Red, yellow and green LEDs on GPIO 21, 47 and 14, each through a 220-ohm resistor. nRF24L01 radio on SoftSPI (CE 1, CSN 39, SCK 42, MOSI 41, MISO 40), powered from 3.3 V only, with a 10 µF capacitor.
-- Two mini cars, car 1 and car 2, each with its own lane and stop line in front of the light. Both run the same car.py; only the line CAR_ID = 1 or CAR_ID = 2 differs. Car 1 listens on radio address CAR01 and car 2 on CAR02; the light sends to both 5 times a second.
+- Car 1 is the mini car that drives in its lane and stops at the stop line in front of the light (radio address CAR01). Car 2 no longer drives: it is the CROSSING BEEPER for blind people (radio address CAR02). It listens to the light: cars have red = fast ticks and its LED on (safe to cross); cars have green or emergency = slow ticks (wait); no signal = a low boop. Its BOOTSEL button switches between crossing beeper, ambulance, police, fire truck, ice-cream van and quiet sounds.
+- Ambulance priority: in EMERGENCY the light flashes red, every car stops and car 1 plays a siren every 6 seconds.
+- Live traffic camera: an ESP32-CAM sends about 10 pictures a second to the laptop over USB (traffic_camera.py, or \"Ultron, show the traffic camera\"). The laptop counts cars passing a yellow box, shows the light colour, and saves a red-light photo in Desktop\\Red light photos when a car crosses on red. The camera saves photos on its SD card only when something moves.
 - Each mini car: Raspberry Pi Pico running MicroPython (car.py as main.py). L298N motor driver on GP2-GP7 (ENA, IN1-IN4, ENB), two gear motors, TCRT5000 infrared line sensor on GP15, its own nRF24L01 on SPI0 (SCK 18, MOSI 19, MISO 16, CSN 17, CE 20), two 18650 batteries (about 7.4 V).
 - Radio: channel 108, 1 Mbps, 8-byte messages packed with struct "<BBBBBBH": ID 0x7A, sender (1 light, 2 car), light colour, car command, speed, car state, crossing counter. The light sends 5 times a second, the car replies 3 times a second.
 - Car logic: a state machine. DRIVING; at the black stop line it checks the light: green -> CROSSING, red or yellow -> WAITING until green. 1.2 s after crossing it is DRIVING again. Safety: no radio for 1 s -> brake; STOP from the phone -> brake. The line must be seen twice in a row (no flicker). A crossing on red is counted as a red-light violation.
@@ -1333,7 +1379,7 @@ nav.tabs button[aria-selected="true"] svg { color: var(--accent); }
 - Team: Tanzil (main speaker), Hashir (parts, circuits, testing), Aashiq (the code, works the phone in the demo), Kaushal (radio, phone control, future work), Harshit (moves the car in the demo), Sathwik and Dhiyas.
 TRAFFIC LIGHT COMMANDS: A auto cycle | R, Y, G hold a colour | NEXT next colour now | PED pedestrian button (green ends early, or a full red) | NIGHT flashing yellow, car drives slowly | TEST lamp test | STOP both cars brake | GO both cars drive and obey lights | RUSH both cars ignore lights (red-light test) | add 1 or 2 for one car only: STOP1, GO2, RUSH1, HORN2 | FASTER, SLOWER speed +/-20 | SPEED=100..255 | GREEN=1..60, YELLOW=1..10, RED=1..60 seconds | MUTE silences the car buzzers (VOICE turns them back on) | HORN both cars honk | S status | PING check | RESET zero the counters.
 REMOTE CONTROL AND SPECIAL COMMANDS: REMOTE1 / REMOTE2 drive that car from the phone | D1=F, D1=B, D1=L, D1=R, D1=S drive car 1 forward, back, turn left, turn right, stop (D2= for car 2); each drive command lasts 0.8 s, so the app repeats it while the arrow is held | GO1 gives the car back to the traffic light | TONE1=0..5 car 1 sound: 0 beep, 1 horn, 2 melody, 3 siren, 4 start tune, 5 alarm (TONE= both cars) | EMERGENCY flashing red and every car stops (send it again, or A, to end it) | PARTY light show (again to stop) | BRIGHT=10..100 LED brightness % | GBLINK green blinks for its last 3 seconds (on/off) | JC live car data: line sensor, wheels, speed, radio.
-- The Car 1 and Car 2 pages of the app show each car's line sensor (black line or floor), what the wheels are doing, its speed and its radio signal, with a drive pad and sound buttons.`;
+- The Car 1 page of the app shows the car's line sensor (black line or floor), what the wheels are doing, its speed and its radio signal, with a drive pad and sound buttons. The Beeper page shows whether people may cross now.`;
 
   const RULES = `You are the AI inside the Smart Traffic Light Remote phone app, made by a school team. Talk to the user like a friendly, clear expert.
 - Answer ANY question the user asks: about this project, electronics, coding, science, school work, general knowledge, anything. Keep answers short and easy to read on a phone (usually under 120 words, plain text, no markdown tables) unless the user asks for more detail. Answer in the user's language.

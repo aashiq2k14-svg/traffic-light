@@ -1,5 +1,5 @@
 // Keeps the app working offline. Bump VERSION whenever you upload new files.
-const VERSION = "stl-v4";
+const VERSION = "stl-v5";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "privacy.html",
   "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png"];
 
