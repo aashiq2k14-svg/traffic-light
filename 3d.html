@@ -144,9 +144,10 @@ h1{font:700 34px/1 var(--f-display);letter-spacing:.01em;margin:6px 0 4px;text-w
     <p class="sub" id="carSub"></p>
   </div>
   <div class="carswitch" role="group" aria-label="Choose the car">
-    <button id="pick-light" data-car="light" aria-pressed="true"><b>Traffic light</b><small>ESP32-S3 · radio 1</small></button>
+    <button id="pick-all" data-car="all" aria-pressed="true"><b>Whole project</b><small>light + cars + roads</small></button>
+    <button id="pick-light" data-car="light" aria-pressed="false"><b>Traffic light</b><small>ESP32-S3 · radio 1</small></button>
     <button id="pick-car1" data-car="car1" aria-pressed="false"><b>Car 1</b><small>L298N · TT motors</small></button>
-    <button id="pick-car2" data-car="car2" aria-pressed="false"><b>Car 2</b><small>TB6612FNG · 4WD</small></button>
+    <button id="pick-car2" data-car="car2" aria-pressed="false"><b>Car 2</b><small>crossing beeper</small></button>
   </div>
 </header>
 
@@ -1848,8 +1849,9 @@ const LIGHT_MODEL = {
   title: 'Traffic light', front: 'faces the cars', sub: 'Your stand · ESP32-S3 without a breadboard · radio 1 · USB power',
   stats: [
     ['Electronics box', '10 × 10.5 × 9 cm', 'outside the track wall'],
-    ['Pole', 'about 17 cm', '5 cm white tube, hollow'],
-    ['Light head', '10 × 5 × 5 cm', 'white box, LEDs through holes'],
+    ['Pole', '5 cm white tube', 'hollow, wires inside'],
+    ['Camera box', 'under the lights', 'ESP32-CAM looking at the road'],
+    ['Light head', 'white box, black lid', 'lights through a window'],
     ['ESP32 block', '3 cm tall', 'cardboard, under the board'],
     ['Stop line', '2 cm', 'before the pole holder'],
   ],
@@ -1859,7 +1861,6 @@ const LIGHT_MODEL = {
       dimension(V(-5, 0, -11), V(-5, 0, -0.4), V(-2.5, 0, 0), '10.5 cm'),
       dimension(V(-5, 0, -11), V(-5, 9, -11), V(-2, 0, -2), '9 cm'),
       dimension(V(3, 0, 7), V(3, box.max.y, 7), V(2.5, 0, 2.5), f(box.max.y) + ' cm high'),
-      dimension(V(3, 21, 6), V(3, 31, 6), V(0, 0, 1.6), 'head 10 cm'),
       dimension(V(3.5, 0.32, 8.5), V(5.55, 0.32, 8.5), V(0, 0, 1.5), '2 cm to the stop line'),
     ];
   },
@@ -1870,16 +1871,36 @@ const LIGHT_MODEL = {
       cardboardBox(7, 4, 7, 0, zP, 0.55, false), [3.0, 4.8, 6.6]);
     const pole = new THREE.Group();
     const tubeMat = M(0xf6f6f3, { roughness: 0.7, transparent: true, opacity: 0.42, side: THREE.DoubleSide }); tubeMat.depthWrite = false;
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 17.7, 40, 1, true), tubeMat);
-    tube.position.set(0, 4.3 + 17.7 / 2, zP); pole.add(tube);
-    add('pole', 'White tube pole', '5 cm wide, about 17 cm tall', 'Hollow, so the four light wires run down inside it. You can see them through it here.',
-      pole, [-2.5, 12, zP - 2.6]);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 12, 40, 1, true), tubeMat);
+    tube.position.set(0, 4.3 + 12 / 2, zP); pole.add(tube);
+    add('pole', 'White tube pole', '5 cm wide', 'Hollow, so the four light wires run down inside it. You can see them through it here.',
+      pole, [-2.5, 10, zP - 2.6]);
+    /* camera box: open at the front, ESP32-CAM inside looking at the road */
+    const cb = new THREE.Group(), cbm = M(0xc9a26b, { roughness: 0.9, transparent: true, opacity: 0.7 }); cbm.depthWrite = false;
+    const cy = 16.3, ch = 6.5, cw = 6.4, t = 0.3;
+    [B(cw, t, cw, cbm, 0.3, cy + t / 2, zP), B(cw, t, cw, cbm, 0.3, cy + ch - t / 2, zP), B(t, ch, cw, cbm, 0.3 - cw / 2 + t / 2, cy + ch / 2, zP),
+     B(cw, ch, t, cbm, 0.3, cy + ch / 2, zP - cw / 2 + t / 2), B(cw, ch, t, cbm, 0.3, cy + ch / 2, zP + cw / 2 - t / 2),
+     B(t, 2.2, cw, cbm, 0.3 + cw / 2 - t / 2, cy + ch - 1.1, zP)].forEach(m => { m.castShadow = false; cb.add(m); });
+    const cbo = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(cw, ch, cw)), edgeMat); cbo.position.set(0.3, cy + ch / 2, zP); cb.add(cbo);
+    const cam = new THREE.Group();
+    cam.add(B(0.16, 4.0, 2.7, M(0x1b1b1b, { roughness: 0.4 }), 0, 0, 0));
+    cam.add(B(0.25, 0.9, 0.9, M(0x2a2a2a), 0.2, 0.9, 0));
+    cam.add(C(0.38, 0.5, M(0x0d0d0d, { roughness: 0.2, metalness: 0.4 }), 'x', 0.5, 0.9, 0, 20));
+    cam.add(C(0.2, 0.05, M(0x3a5f9a, { roughness: 0.1, metalness: 0.6 }), 'x', 0.76, 0.9, 0, 16));
+    cam.add(B(0.1, 0.5, 0.5, M(0xfff6d8, { emissive: 0xfff2c0, emissiveIntensity: 0.25 }), 0.12, -0.5, 0.7));      // flash LED
+    cam.position.set(1.6, cy + 3.0, zP); cb.add(cam);
+    const usb = new THREE.CatmullRomCurve3([V(1.4, cy + 0.9, zP + 0.6), V(1.0, cy - 0.5, zP + 2.2), V(1.6, 9, zP + 2.9), V(3.4, 4.6, zP + 3.3), V(5.5, 1.2, zP + 4.4), V(9, 0.4, zP + 6)], false, 'centripetal');
+    const usbM = new THREE.Mesh(new THREE.TubeGeometry(usb, 50, 0.16, 8, false), M(0xeceae4, { roughness: 0.6 })); usbM.castShadow = true; cb.add(usbM);
+    add('camera', 'ESP32-CAM traffic camera', 'in an open box under the lights', 'Looks down the road at the stop line. Its USB cable goes to the laptop: live video, the car counter and red-light photos.',
+      cb, [3.8, cy + ch + 0.8, zP + 1.8]);
+    /* white light head on top, black lid */
     const headMat = M(0xf4f4f2, { roughness: 0.8, transparent: true, opacity: 0.6 }); headMat.depthWrite = false;
-    const head = new THREE.Group(); const hb = B(5, 10, 5, headMat, 0.5, 26, zP); hb.castShadow = false; head.add(hb);
+    const head = new THREE.Group(); const hb = B(5, 8, 5, headMat, 0.5, 26.8, zP); hb.castShadow = false; head.add(hb);
     const ho = new THREE.LineSegments(new THREE.EdgesGeometry(hb.geometry), edgeMat); ho.position.copy(hb.position); head.add(ho);
-    add('head', 'Light head box', '10 × 5 × 5 cm', 'White box on top of the tube, with three holes in the front for the lights.',
-      head, [0.5, 31.8, zP]);
-    const mod = lightModule(); mod.position.set(2.6, 26.5, zP);
+    head.add(B(5.6, 0.3, 5.6, M(0x161616, { roughness: 0.5 }), 0.5, 30.95, zP));
+    add('head', 'Light head box', 'white box, black lid', 'On top of the camera box, with a window in the front for the red, yellow and green lights.',
+      head, [0.5, 32, zP]);
+    const mod = lightModule(); mod.position.set(2.6, 26.8, zP);
     add('light', 'Traffic light LED module', '5.6 × 2.1 cm, 4 pins', 'Inside the head, LEDs pushed through the holes, facing the cars. Pins at the bottom: GND, R, Y, G.',
       mod, [3.8, 26.5, zP + 1.8]);
 
@@ -1899,25 +1920,37 @@ const LIGHT_MODEL = {
     add('esp', 'ESP32-S3 DevKitC (N16R8)', '6.9 × 2.55 cm', 'Rests on the block, pins pointing down. Female jumper plugs go straight onto 11 pins. USB-C end toward the cable hole.',
       esp, [0.4, 4.8, -6]);
     const rg = new THREE.Group();
-    const rd = radio(1.5); rd.rotation.y = -Math.PI / 2; rd.position.set(1.5, floor, -2.4); rg.add(rd);
-    const cp = capacitor(); cp.position.set(2.7, floor, -2.7); rg.add(cp);
-    add('radio', 'nRF24L01 radio 1 + 10 µF', '2.9 × 1.55 cm', 'On a foam block between the ESP32 and the wall, antenna toward the track. Cardboard does not block the signal.',
-      rg, [1.5, 3.6, -1.6]);
+    const rd = radio(1.5); rd.rotation.y = -Math.PI / 2; rd.position.set(3.2, 9.0, -1.6); rg.add(rd);
+    const cp = capacitor(); cp.position.set(4.3, 9.0, -1.9); rg.add(cp);
+    rg.add(B(3.2, 0.3, 2.2, M(0xb68d5a, { roughness: 0.95 }), 3.2, 8.95, -1.6));
+    add('radio', 'nRF24L01 radio 1 + 10 µF', '2.9 × 1.55 cm', 'On top of the box edge, next to the pole, antenna toward the track. Up high it hears the cars best.',
+      rg, [3.2, 12.4, -1.6]);
     const pw = new THREE.Group();
-    pw.add(B(6.5, 2, 9, M(0x3a3f45, { roughness: 0.5 }), -14, 1.0, -7));
+    pw.add(B(2.2, 6.6, 9, M(0x26292e, { roughness: 0.5 }), -12.6, 3.6, -7));                           // power bank standing on its side
+    pw.add(B(0.05, 0.5, 0.9, M(0x2f8bff, { emissive: 0x1d6fe0, emissiveIntensity: 0.7 }), -11.47, 6.2, -9.5)); // its blue USB port
+    const pocket = cardboardBox(3.4, 7.2, 10.6, -12.6, -7, 0.55, true); pw.add(pocket);
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(3.9, 0.16, 8, 48), M(0xff6a1a, { roughness: 0.5 }));
+    tie.rotation.y = Math.PI / 2; tie.scale.set(1, 1.15, 0.6); tie.position.set(-12.6, 4.2, -7); pw.add(tie);
     const cab = M(0x2c2c2c, { roughness: 0.6 });
     pw.add(B(0.8, 0.45, 0.9, cab, -4.0, 3.62, -6.6));
     const cc = new THREE.CatmullRomCurve3([V(-4.4, 3.62, -6.6), V(-5.4, 3.6, -6.6), V(-6.6, 2.4, -6.7), V(-8.0, 0.3, -6.9), V(-9.8, 0.6, -7.0), V(-10.4, 1.0, -7.0)], false, 'centripetal');
     const ct = new THREE.Mesh(new THREE.TubeGeometry(cc, 40, 0.18, 8, false), cab); ct.castShadow = true; pw.add(ct);
     pw.add(B(0.8, 0.5, 0.9, cab, -10.4, 1.0, -7.0));
-    add('power', 'USB-C cable + power bank', 'any 5 V power bank', 'Out through the side hole. Or a laptop USB port. The stand needs no battery.',
-      pw, [-14, 2.8, -7], { noBox: true });
+    add('power', 'Power bank in its pocket', 'held with an orange cable tie', 'A cardboard pocket on the side of the box holds the power bank on its side; the USB cable goes to the ESP32. Or use a laptop USB port.',
+      pw, [-12.6, 8.6, -7], { noBox: true });
     const tr = new THREE.Group();
-    const fl = B(50, 0.3, 30, M(0x1f6fd1, { roughness: 0.6 }), 0, 0.15, 15); fl.castShadow = false; tr.add(fl);
+    const flat = (w, d, col, x, z, y) => { const m = B(w, 0.3, d, M(col, { roughness: 0.55 }), x, y || 0.15, z); m.castShadow = false; tr.add(m); return m; };
+    const TL = LIGHT_MODEL.trackLen || 50, TX = LIGHT_MODEL.trackX || 0;
+    flat(TL, 15, 0x1f6fd1, TX, 7.5);                                        // blue road: the cars' lane
+    flat(TL, 15, 0xf2cf1d, TX, 22.5);                                       // yellow road
+    flat(TL, 0.9, 0x1f9a4a, TX, 15, 0.17);                                  // green line between the roads
+    flat(TL, 0.7, 0x1f9a4a, TX, 0.6, 0.17);                                 // green edge line
+    for (let x = -18; x < TX + TL / 2; x += 12) if (Math.abs(x - 6.5) > 2) flat(0.9, 15, 0xd9c14a, x, 7.5, 0.17); // yellow tape lines on the blue road
+    for (let x = -18; x < TX + TL / 2; x += 12) flat(0.9, 15, 0x3b5bc4, x, 22.5, 0.17); // blue tape lines on the yellow road
     const wallMat = M(0xc9a26b, { roughness: 0.9, transparent: true, opacity: 0.45 }); wallMat.depthWrite = false;
-    const wl = B(50, 9, 0.4, wallMat, 0, 4.5, -0.2); wl.castShadow = false; tr.add(wl);
-    const tape = B(1.9, 0.04, 30, M(0x15193a, { roughness: 0.4 }), 6.5, 0.32, 15); tape.castShadow = false; tr.add(tape);
-    add('track', 'Your track: wall + stop line', 'dark tape 1.9 cm wide', 'Cars come from the yellow end. Put the stop line just before the pole holder so cars stop before the light.',
+    const wl = B(LIGHT_MODEL.trackLen || 50, 9, 0.4, wallMat, LIGHT_MODEL.trackX || 0, 4.5, -0.2); wl.castShadow = false; tr.add(wl);
+    const tape = B(1.9, 0.06, 15, M(0x101114, { roughness: 0.4 }), 6.5, 0.33, 7.5); tape.castShadow = false; tr.add(tape);
+    add('track', 'Your track: two roads + stop line', 'black tape 1.9 cm wide', 'The cars drive on the blue road and stop at the black tape just before the light. The yellow road is the second road, with blue tape lanes.',
       tr, [12, 0.8, 12], { noBox: true });
 
     /* wires */
@@ -1928,20 +1961,60 @@ const LIGHT_MODEL = {
       const A = lp(n), B2 = ep(side, i), zo = { GND: 0.24, R: 0.08, Y: -0.08, G: -0.24 }[n];
       const last = side === 'L' ? [-4.2, 0.7, -7.5 + zo * 0.5] : [-3.0, 0.7, -4.3];
       W('Lights', col, 'Light ' + n, espName(side, i), A, B2, ['light', 'esp', 'pole'],
-        { via: [[2.6, 22.4, A.p.z], [1.0, 21.6, zP + zo], [0.3, 18, zP + zo], [0.3, 6, zP + zo], [-0.6, 3.3, 2.3 + zo], [-2.5, 2.4 + zo, 0.4], [-2.6, 2.3 + zo, -1.2], [-4.0, 1.0, -2.7 + zo], last], arc: false });
+        { via: [[2.6, 22.6, A.p.z], [1.0, 22.0, zP + zo], [0.3, 18, zP + zo], [0.3, 6, zP + zo], [-0.6, 3.3, 2.3 + zo], [-2.5, 2.4 + zo, 0.4], [-2.6, 2.3 + zo, -1.2], [-4.0, 1.0, -2.7 + zo], last], arc: false });
     });
     const toR = (n, i, col) => { const A = radioPin(rd, 1.5, n), B2 = ep('R', i);
-      W('Radio', col, 'Radio ' + n, espName('R', i), A, B2, ['radio', 'esp'], { via: [[A.p.x, 0.7, A.p.z - 0.35], [B2.p.x, 0.7, B2.p.z + 0.45]], arc: false }); };
+      W('Radio', col, 'Radio ' + n, espName('R', i), A, B2, ['radio', 'esp'], { via: [[A.p.x, 8.2, A.p.z - 0.4], [2.6, 5.5, -3.2], [B2.p.x, 2.2, B2.p.z + 0.45]], arc: false }); };
     toR('SCK', 5, 'yellow'); toR('MOSI', 6, 'green'); toR('MISO', 7, 'blue'); toR('CSN', 8, 'orange'); toR('CE', 3, 'white'); toR('GND', 0, 'black');
     const Av = radioPin(rd, 1.5, 'VCC'), Bv = ep('L', 1);
-    W('Radio', 'red', 'Radio VCC', espName('L', 1), Av, Bv, ['radio', 'esp'], { via: [[Av.p.x, 0.7, Av.p.z - 0.35], [2.3, 0.65, -5.6], [Bv.p.x, 0.7, Bv.p.z - 0.1]], arc: false });
+    W('Radio', 'red', 'Radio VCC', espName('L', 1), Av, Bv, ['radio', 'esp'], { via: [[Av.p.x, 8.2, Av.p.z - 0.4], [2.6, 5.5, -3.4], [2.3, 2.2, -5.6], [Bv.p.x, 1.6, Bv.p.z - 0.1]], arc: false });
     W('Radio', 'grey', '10 µF capacitor + leg', 'Radio VCC', capPin(cp, true), radioPin(rd, 1.5, 'VCC'), ['radio']);
     W('Radio', 'grey', '10 µF capacitor − leg', 'Radio GND', capPin(cp, false), radioPin(rd, 1.5, 'GND'), ['radio']);
   }
 };
 
 /* ---------- the three models ---------- */
+const PLACE = {   // where each car stands on the track in the whole-project view
+  car1: { x: 19.6, z: 7.5, ry: Math.PI, y: 0.3 },     // on the blue road, waiting at the black stop line
+  car2: { x: -12, z: 22.5, ry: 0, y: 0.3 },           // parked on the yellow road at the crossing: the crossing beeper
+};
+const WHOLE = {
+  title: 'Whole project', front: 'cars face the light', sub: 'Traffic light · car 1 at the stop line · car 2 (crossing beeper) · camera · both roads',
+  stats: [
+    ['Traffic light', 'ESP32-S3 · radio 1', 'white head, camera box, tube pole'],
+    ['Car 1', 'L298N · Pico · radio', 'waits at the black stop line'],
+    ['Car 2', 'Pico · radio · buzzer', 'crossing beeper for blind people'],
+    ['Camera', 'ESP32-CAM', 'counts cars, red-light photos'],
+    ['Roads', 'blue + yellow', 'black tape stop line'],
+  ],
+  dims() { return []; },
+  build(add, wire) {
+    LIGHT_MODEL.trackLen = 100; LIGHT_MODEL.trackX = 18;
+    try { LIGHT_MODEL.build(add, wire); } finally { LIGHT_MODEL.trackLen = 0; LIGHT_MODEL.trackX = 0; }
+    for (const key of ['car1', 'car2']) {
+      const c = CARS[key], P = PLACE[key];
+      const m = new THREE.Matrix4().compose(V(P.x, P.y, P.z), new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), P.ry), V(1, 1, 1));
+      const q = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), P.ry);
+      const tp = a => V(a[0], a[1], a[2]).applyMatrix4(m);
+      const tA = A => ({ p: A.p.clone().applyMatrix4(m), n: A.n.clone().applyQuaternion(q) });
+      const pre = key === 'car1' ? 'Car 1 · ' : 'Car 2 · ';
+      const later = [];                       // parts join their car group after the build, so wire ends stay in car coordinates
+      c.build.call(c, (id, name, size, note, obj, pin, opts) => {
+        obj.traverse(o3 => { if (o3.isMesh) o3.userData.part = key + '-' + id; });
+        const g = new THREE.Group(); g.position.set(P.x, P.y, P.z); g.rotation.y = P.ry; later.push([g, obj]);
+        const pp = tp(pin);
+        add(key + '-' + id, pre + name, size, note, g, [pp.x, pp.y, pp.z], opts);
+      }, (group, color, from, to, A, B, ids, o) => {
+        const o2 = Object.assign({}, o || {});
+        if (o2.via) o2.via = o2.via.map(v => { const t = tp(v); return [t.x, t.y, t.z]; });
+        wire(pre + group, color, from, to, tA(A), tA(B), (ids || []).map(i => key + '-' + i), o2);
+      });
+      later.forEach(([g, obj]) => g.add(obj));
+    }
+  }
+};
 const CARS = {
+  all: WHOLE,
   light: LIGHT_MODEL,
   car1: {
     title: 'Car 1', front: 'radio end', sub: 'L298N driver · yellow TT motors · Pico 1 · radio 2',
@@ -2333,8 +2406,8 @@ function setView(name, instant) {
 }
 
 /* ---------- toggles ---------- */
-const HASHES = { light: 'light', car1: 'car-1', car2: 'car-2' };
-const keyFromHash = h => h === '#car-1' ? 'car1' : h === '#car-2' ? 'car2' : 'light';
+const HASHES = { all: 'all', light: 'light', car1: 'car-1', car2: 'car-2' };
+const keyFromHash = h => h === '#car-1' ? 'car1' : h === '#car-2' ? 'car2' : h === '#light' ? 'light' : 'all';
 let spinOn = !reduce, dimsOn = true, pinsOn = true, wiresOn = true;
 const tSpin = document.getElementById('tSpin'), tDims = document.getElementById('tDims'), tPins = document.getElementById('tPins'), tWires = document.getElementById('tWires');
 function syncToggles() {
